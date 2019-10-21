@@ -27,12 +27,10 @@ parser.add_argument('--gff', required=True, type=str,
 	metavar='<path>', help='path to input GFF3 (or similar) file')
 parser.add_argument('--out', required=True, type=str,
 	metavar='<str>', help='output name (file or dir)')
-parser.add_argument('--source', required=False, type=str,
+parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
-parser.add_argument('--split', required=False, type=int, default=1,
-	metavar='<int>', help='split into <int> parts [%(default)d]')
-parser.add_argument('--padding', required=False, type=int, default=100,
-	metavar='<int>', help='length of flanking sequence [%(default)d]')
+parser.add_argument('--padding', required=True, type=int,
+	metavar='<int>', help='length of flanking sequence')
 arg = parser.parse_args()
 
 class HamanError(Exception):
@@ -40,9 +38,8 @@ class HamanError(Exception):
 
 if __name__ == '__main__':	
 
-	if os.path.exists(arg.out):
-		raise HamanError('output dir exists, will not overwrite')
-	os.mkdir(arg.out)
+	if not os.path.exists(arg.out):
+		os.mkdir(arg.out)
 	
 	genome = Reader(gff=arg.gff, fasta=arg.fasta, source=arg.source)
 	idx = 0
