@@ -113,7 +113,7 @@ rna_supported = 0
 training = []
 
 o = open(arg.out, 'w+')
-o.write('region\tlen\ttxs\texons\trna_introns\tlkd1\tlkd2\n')
+o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
 	prefix = arg.regions + '/' + region + '/' + region
@@ -134,10 +134,12 @@ for region in os.listdir(arg.regions):
 	gff = GFF_file(file=prefix + '.gff', source=arg.source)
 	rna_introns = gff.get(type='intron')
 	rna_count = 0
+	rna_mass = 0
 	intron_support = {}
 	for intron in rna_introns:
 		if intron.source != 'RNASeq_splice': continue
 		rna_count += 1
+		rna_mass += int(float(intron.score))
 		if intron.beg not in intron_support:
 			intron_support[intron.beg] = {}
 			intron_support[intron.beg][intron.end] = True
@@ -149,6 +151,7 @@ for region in os.listdir(arg.regions):
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
+		gid = gene.id
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
 				tx_len = tx.end - tx.beg
@@ -163,8 +166,8 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, glen, tx_count,
-				ex_count, rna_count, d1, d2))
+			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gid, glen, tx_count,
+				ex_count, rna_count, rna_mass, d1, d2))
 				
 o.close()
 
