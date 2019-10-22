@@ -67,10 +67,11 @@ def distance (region, gff, gene):
 	annotated = []
 	txmass = rtotal / len(gene.transcripts())
 	for tx in gene.transcripts():
-		iweight = txmass / (len(tx.introns))
-		for f in tx.introns:
-			f.score = iweight
-			annotated.append(f)
+		if len(tx.introns) > 0:
+			iweight = txmass / (len(tx.introns))
+			for f in tx.introns:
+				f.score = iweight
+				annotated.append(f)
 	if len(annotated) == 0:
 		print(region, "no annotation data?")
 		return(0,0)
@@ -81,7 +82,7 @@ def distance (region, gff, gene):
 	for r in rnaseq:
 		unique = True
 		for f in annotated:
-			if r.beg == f.beg and r.end == f.end:
+			if r.beg == f.beg and r.end == f.end and r.strand == f.strand:
 				unique = False
 				break
 		if unique: add.append(Feature(f.dna, r.beg, r.end, r.strand, 'intron',
@@ -93,7 +94,8 @@ def distance (region, gff, gene):
 	for f in annotated: atotal += f.score
 	for f in annotated: f.score = f.score / atotal
 	
-	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
+	d1, d2 =  lkd(rnaseq, annotated), lkd(annotated, rnaseq)
+	return d1, d2
 
 
 coding = 0
@@ -143,8 +145,7 @@ for region in os.listdir(arg.regions):
 		rna_supported += 1 
 		training.append(region)
 		# check how well annotation matches introns using new methods
-	d1, d2 = distance(region, gff, gene)
-	print(region, d1, d2)
+		d1, d2 = distance(region, gff, gene)
 
 
 r = open(arg.report, 'w+')
