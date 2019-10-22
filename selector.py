@@ -110,8 +110,10 @@ isolated = 0
 spliced = 0
 canonical = 0
 rna_supported = 0
-
 training = []
+
+o = open(arg.out, 'w+')
+o.write('region\tlen\ttxs\texons\trna_introns\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
 	prefix = arg.regions + '/' + region + '/' + region
@@ -128,43 +130,45 @@ for region in os.listdir(arg.regions):
 	spliced += 1
 	if meta['pc_issues']: continue
 	canonical += 1
-	#memorize RNA-seq supported intron coordinates
+	#memorize RNA-seq supported intron coordinates and count RNA-supported introns
 	gff = GFF_file(file=prefix + '.gff', source=arg.source)
 	rna_introns = gff.get(type='intron')
+	rna_count = 0
 	intron_support = {}
 	for intron in rna_introns:
 		if intron.source != 'RNASeq_splice': continue
+		rna_count += 1
 		if intron.beg not in intron_support:
 			intron_support[intron.beg] = {}
 			intron_support[intron.beg][intron.end] = True
 	#determine support for annotated introns
 	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
-	supported = 0
-	gene = None
-	for chrom in genome:
-		genes = chrom.ftable.build_genes()
-		gene = genes[0]
-		for tx in gene.transcripts():
-			for intron in tx.introns:
-				if intron.beg in intron_support and intron.end in intron_support[intron.beg]:
-					supported += 1
-	if meta['introns'] == supported:
-		rna_supported += 1 
-		training.append(region)
-		# check how well annotation matches introns using new methods
-		d1, d2 = distance(region, gff, gene)
 
+	for chrom in genome:
+		supported = 0
+		tx_len = 0
+		ex_count = 0
+		gene = chrom.ftable.build_genes()[0]
+		for tx in gene.transcripts():
+			if tx.end - tx.beg > tx_len:
+				tx_len = tx.end - tx.beg
+				ex_count = len(tx.exons)
+			for intron in tx.introns:
+				if (intron.beg in intron_support and
+					intron.end in intron_support[intron.beg]): supported += 1
+		if meta['introns'] == supported:
+			rna_supported += 1 
+			training.append(region)
+			glen = gene.end - gene.beg
+			tx_count = len(gene.transcripts())
+			# check how well annotation matches introns using new methods
+			d1, d2 = distance(region, gff, gene)
+			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, glen, tx_count,
+				ex_count, rna_count, d1, d2))
+				
+o.close()
 
 r = open(arg.report, 'w+')
-r.write('coding:{}\nisolated:{}\nspliced:{}\ncanonical:{}\nsupported:{}'.format(coding, isolated, spliced, canonical, rna_supported))
+r.write('coding:{}\nisolated:{}\nspliced:{}\ncanonical:{}\nsupported:{}'.format(coding,
+	isolated, spliced, canonical, rna_supported))
 r.close()
-
-
-o = open(arg.out, 'w+')
-for region in training:
-	gff = arg.regions + '/' + region + '/' + region + '.gff'
-	fasta = arg.regions + '/' + region + '/' + region + '.fa'
-	genome = Reader(gff=gff, fasta=fasta, source=arg.source)
-	
-	
-o.close()
