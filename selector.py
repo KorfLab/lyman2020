@@ -40,8 +40,7 @@ def lkd(set1, set2):
 	d = 0
 	for beg in set1:
 		for end in set1[beg]:
-			for strand in set1[beg][end]:
-				d += set1[beg][end][strand] * math.log(set1[beg][end][strand] / set2[beg][end][strand])
+			d += set1[beg][end] * math.log(set1[beg][end] / set2[beg][end])
 
 	return d
 
@@ -49,12 +48,10 @@ def convert_to_freq(count):
 	total = 0
 	for beg in count:
 		for end in count[beg]:
-			for strand in count[beg][end]:
-				total += count[beg][end][strand]
+			total += count[beg][end]
 	for beg in count:
 		for end in count[beg]:
-			for strand in count[beg][end]:
-				count[beg][end][strand] /= total
+			count[beg][end] /= total
 
 def distance(region, gff, gene):
 
@@ -62,14 +59,13 @@ def distance(region, gff, gene):
 	rnaseq = {}
 	rnamass = 0
 	for f in gff.get(type='intron'):
-		if f.source == 'RNASeq_splice':
-			if f.beg not in rnaseq:
-				rnaseq[f.beg] = {}
-			if f.end not in rnaseq[f.beg]:
-				rnaseq[f.beg][f.end] = {}
-			if f.strand not in rnaseq[f.beg][f.end]:
-				rnaseq[f.beg][f.end][f.strand] = float(f.score)
-				rnamass += float(f.score)
+		if f.strand != gene.strand: continue
+		if f.source != 'RNASeq_splice': continue
+		if f.beg not in rnaseq:
+			rnaseq[f.beg] = {}
+		if f.end not in rnaseq[f.beg]:
+			rnaseq[f.beg][f.end] = float(f.score)
+			rnamass += float(f.score)
 
 	# collect annotated introns
 	annotated = {}
@@ -84,21 +80,16 @@ def distance(region, gff, gene):
 			if f.beg not in annotated:
 				annotated[f.beg] = {}
 			if f.end not in annotated[f.beg]:
-				annotated[f.beg][f.end] = {}
-			if f.strand not in annotated[f.beg][f.end]:
-				annotated[f.beg][f.end][f.strand] = 0
-			annotated[f.beg][f.end][f.strand] += iweight
+				annotated[f.beg][f.end] = 0
+			annotated[f.beg][f.end] += iweight
 
 	# add missing introns from rnaseq with 1 pseudocount
 	for beg in rnaseq:
 		for end in rnaseq[beg]:
-			for strand in rnaseq[beg][end]:
-				if beg not in annotated:
-					annotated[beg] = {}
-				if end not in annotated[beg]:
-					annotated[beg][end] = {}
-				if strand not in annotated[beg][end]:
-					annotated[beg][end][strand] = 1
+			if beg not in annotated:
+				annotated[beg] = {}
+			if end not in annotated[beg]:
+				annotated[beg][end] = 1
 	
 	# convert to freqs and calculate distance
 	convert_to_freq(rnaseq)
@@ -130,28 +121,27 @@ for region in os.listdir(arg.regions):
 	spliced += 1
 	if meta['pc_issues']: continue
 	canonical += 1
-	#memorize RNA-seq supported intron coordinates and count RNA-supported introns
+	# memorize RNA-supported intron coordinates and count RNA-supported introns
 	gff = GFF_file(file=prefix + '.gff', source=arg.source)
-	rna_introns = gff.get(type='intron')
-	rna_count = 0
-	rna_mass = 0
-	intron_support = {}
-	for intron in rna_introns:
-		if intron.source != 'RNASeq_splice': continue
-		rna_count += 1
-		rna_mass += int(float(intron.score))
-		if intron.beg not in intron_support:
-			intron_support[intron.beg] = {}
-			intron_support[intron.beg][intron.end] = True
-	#determine support for annotated introns
 	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
-
 	for chrom in genome:
+		rna_count = 0
+		rna_mass = 0
 		supported = 0
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
-		gid = gene.id
+		rna_introns = gff.get(type='intron')
+		intron_support = {}
+		for intron in rna_introns:
+			if intron.source != 'RNASeq_splice': continue
+			if intron.strand != gene.strand: continue
+			rna_count += 1
+			rna_mass += int(float(intron.score))
+			if intron.beg not in intron_support:
+				intron_support[intron.beg] = {}
+				intron_support[intron.beg][intron.end] = True
+		
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
 				tx_len = tx.end - tx.beg
@@ -166,8 +156,8 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gid, glen, tx_count,
-				ex_count, rna_count, rna_mass, d1, d2))
+			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
+				tx_count, ex_count, rna_count, rna_mass, d1, d2))
 				
 o.close()
 
