@@ -36,67 +36,74 @@ arg = parser.parse_args()
 if not os.path.exists(arg.regions):
 	raise Exception('invalid path to region directories')
 
-def lkd (set1, set2):
-
+def lkd(set1, set2):
 	d = 0
-	for f1 in set1:
-		for f2 in set2:
-			if f1.beg == f2.beg and f1.end == f2.end and f1.strand == f2.strand:
-				d += f1.score * math.log(f1.score / f2.score)
+	for beg in set1:
+		for end in set1[beg]:
+			for strand in set1[beg][end]:
+				d += set1[beg][end][strand] * math.log(set1[beg][end][strand] / set2[beg][end][strand])
+
 	return d
 
-def distance (region, gff, gene):
+def convert_to_freq(count):
+	total = 0
+	for beg in count:
+		for end in count[beg]:
+			for strand in count[beg][end]:
+				total += count[beg][end][strand]
+	for beg in count:
+		for end in count[beg]:
+			for strand in count[beg][end]:
+				count[beg][end][strand] /= total
+
+def distance(region, gff, gene):
 
 	# collect rnaseq introns
-	rnaseq = []
-	rtotal = 0
+	rnaseq = {}
+	rnamass = 0
 	for f in gff.get(type='intron'):
 		if f.source == 'RNASeq_splice':
-			rnaseq.append(f)
-			rtotal += float(f.score)
-	if len(rnaseq) == 0:
-		print(region, "no rnaseq data?")
-		return(0,0)
-		sys.exit(1)
-
-	# change to freq
-	for f in rnaseq:
-		f.score = float(f.score) / rtotal
+			if f.beg not in rnaseq:
+				rnaseq[f.beg] = {}
+			if f.end not in rnaseq[f.beg]:
+				rnaseq[f.beg][f.end] = {}
+			if f.strand not in rnaseq[f.beg][f.end]:
+				rnaseq[f.beg][f.end][f.strand] = float(f.score)
+				rnamass += float(f.score)
 
 	# collect annotated introns
-	annotated = []
-	txmass = rtotal / len(gene.transcripts())
+	annotated = {}
+	txs = []
 	for tx in gene.transcripts():
-		if len(tx.introns) > 0:
-			iweight = txmass / (len(tx.introns))
-			for f in tx.introns:
-				f.score = iweight
-				annotated.append(f)
-	if len(annotated) == 0:
-		print(region, "no annotation data?")
-		return(0,0)
-		sys.exit(1)
-	
-	# add missing introns from rnaseq with 1 pseudocount
-	add = []
-	for r in rnaseq:
-		unique = True
-		for f in annotated:
-			if r.beg == f.beg and r.end == f.end and r.strand == f.strand:
-				unique = False
-				break
-		if unique: add.append(Feature(f.dna, r.beg, r.end, r.strand, 'intron',
-			score=1))
-	annotated += add
-	
-	# change to frequency
-	atotal = 0
-	for f in annotated: atotal += f.score
-	for f in annotated: f.score = f.score / atotal
-	
-	d1, d2 =  lkd(rnaseq, annotated), lkd(annotated, rnaseq)
-	return d1, d2
+		if len(tx.introns) > 0: txs.append(tx)
+	txmass = rnamass / len(txs)
+	for tx in txs:	
+		iweight = txmass / (len(tx.introns))
+		for f in tx.introns:
+			f.score = iweight # not really used but maybe useful for debugging
+			if f.beg not in annotated:
+				annotated[f.beg] = {}
+			if f.end not in annotated[f.beg]:
+				annotated[f.beg][f.end] = {}
+			if f.strand not in annotated[f.beg][f.end]:
+				annotated[f.beg][f.end][f.strand] = 0
+			annotated[f.beg][f.end][f.strand] += iweight
 
+	# add missing introns from rnaseq with 1 pseudocount
+	for beg in rnaseq:
+		for end in rnaseq[beg]:
+			for strand in rnaseq[beg][end]:
+				if beg not in annotated:
+					annotated[beg] = {}
+				if end not in annotated[beg]:
+					annotated[beg][end] = {}
+				if strand not in annotated[beg][end]:
+					annotated[beg][end][strand] = 1
+	
+	# convert to freqs and calculate distance
+	convert_to_freq(rnaseq)
+	convert_to_freq(annotated)
+	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
 coding = 0
 isolated = 0
