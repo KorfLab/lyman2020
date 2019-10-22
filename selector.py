@@ -27,8 +27,10 @@ parser.add_argument('--regions', required=True, type=str,
 	metavar='<path>', help='directory containing region sub-directories')
 parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
-parser.add_argument('--report', required=False, action='store_true',
-	help='report region statistics')
+parser.add_argument('--report', required=True, type=str,
+	metavar='<path>', help='report output filename')
+parser.add_argument('--out', required=True, type=str,
+	metavar='<path>', help='qualified region list output filename')	
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -104,47 +106,57 @@ training = []
 
 for region in os.listdir(arg.regions):
 	prefix = arg.regions + '/' + region + '/' + region
-	with open(prefix + '.json') as f:
-		meta = json.loads(f.read())
-		coding += meta['pc_genes']
-		if meta['pc_genes'] != 1 or meta['nc_genes'] > 0: continue
-		isolated += 1
-		if meta['introns'] == 0: continue
-		spliced += 1
-		if meta['pc_issues']: continue
-		canonical += 1
-		# memorize RNA-seq supported intron coordinates
-		gff = GFF_file(file=prefix + '.gff', source=arg.source)
-		rna_introns = gff.get(type='intron')
-		intron_support = {}
-		for intron in rna_introns:
-			if intron.beg not in intron_support:
-				intron_support[intron.beg] = {}
-				intron_support[intron.beg][intron.end] = True
-		# determine support for annotated introns
-		genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
-		supported = 0
-		gene = None
-		for chrom in genome:
-			genes = chrom.ftable.build_genes()
-			gene = genes[0]
-			for tx in gene.transcripts():
-				for intron in tx.introns:
-					if intron.beg in intron_support and intron.end in intron_support[intron.beg]:
-						supported += 1
-		if meta['introns'] == supported:
-			rna_supported += 1 
-			training.append(region)
-		
+
+	# read region status from JSON
+	f = open(prefix + '.json')
+	meta = json.loads(f.read())
+	f.close()
+	# skip multi-gene regions, non-coding regions, un-spliced and non-canonical genes
+	coding += meta['pc_genes']
+	if meta['pc_genes'] != 1 or meta['nc_genes'] > 0: continue
+	isolated += 1
+	if meta['introns'] == 0: continue
+	spliced += 1
+	if meta['pc_issues']: continue
+	canonical += 1
+	#memorize RNA-seq supported intron coordinates
+	gff = GFF_file(file=prefix + '.gff', source=arg.source)
+	rna_introns = gff.get(type='intron')
+	intron_support = {}
+	for intron in rna_introns:
+		if intron.source != 'RNASeq_splice': continue
+		if intron.beg not in intron_support:
+			intron_support[intron.beg] = {}
+			intron_support[intron.beg][intron.end] = True
+	#determine support for annotated introns
+	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
+	supported = 0
+	gene = None
+	for chrom in genome:
+		genes = chrom.ftable.build_genes()
+		gene = genes[0]
+		for tx in gene.transcripts():
+			for intron in tx.introns:
+				if intron.beg in intron_support and intron.end in intron_support[intron.beg]:
+					supported += 1
+	if meta['introns'] == supported:
+		rna_supported += 1 
+		training.append(region)
 		# check how well annotation matches introns using new methods
-		d1, d2 = distance(region, gff, gene)
-		print(region, d1, d2)
-
-print(coding, isolated, spliced, canonical, rna_supported)
-
-#print(json.dumps(training, indent=4))
+	d1, d2 = distance(region, gff, gene)
+	print(region, d1, d2)
 
 
+r = open(arg.report, 'w+')
+r.write('coding:{}\nisolated:{}\nspliced:{}\ncanonical:{}\nsupported:{}'.format(coding, isolated, spliced, canonical, rna_supported))
+r.close()
 
 
-
+o = open(arg.out, 'w+')
+for region in training:
+	gff = arg.regions + '/' + region + '/' + region + '.gff'
+	fasta = arg.regions + '/' + region + '/' + region + '.fa'
+	genome = Reader(gff=gff, fasta=fasta, source=arg.source)
+	
+	
+o.close()
