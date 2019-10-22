@@ -6,6 +6,7 @@ import operator
 import os
 import copy
 import json
+import math
 
 from grimoire.io import GFF_file
 from grimoire.sequence import DNA
@@ -35,6 +36,67 @@ arg = parser.parse_args()
 if not os.path.exists(arg.regions):
 	raise Exception('invalid path to region directories')
 
+def lkd (set1, set2):
+
+	d = 0
+	for f1 in set1:
+		for f2 in set2:
+			if f1.beg == f2.beg and f1.end == f2.end and f1.strand == f2.strand:
+				d += f1.score * math.log(f1.score / f2.score)
+	return d
+
+def distance (region, gff, gene):
+
+	# collect rnaseq introns
+	rnaseq = []
+	rtotal = 0
+	for f in gff.get(type='intron'):
+		if f.source == 'RNASeq_splice':
+			rnaseq.append(f)
+			rtotal += float(f.score)
+	if len(rnaseq) == 0:
+		print(region, "no rnaseq data?")
+		return(0,0)
+		sys.exit(1)
+
+	# change to freq
+	for f in rnaseq:
+		f.score = float(f.score) / rtotal
+
+	# collect annotated introns
+	annotated = []
+	txmass = rtotal / len(gene.transcripts())
+	for tx in gene.transcripts():
+		if len(tx.introns) > 0:
+			iweight = txmass / (len(tx.introns))
+			for f in tx.introns:
+				f.score = iweight
+				annotated.append(f)
+	if len(annotated) == 0:
+		print(region, "no annotation data?")
+		return(0,0)
+		sys.exit(1)
+	
+	# add missing introns from rnaseq with 1 pseudocount
+	add = []
+	for r in rnaseq:
+		unique = True
+		for f in annotated:
+			if r.beg == f.beg and r.end == f.end and r.strand == f.strand:
+				unique = False
+				break
+		if unique: add.append(Feature(f.dna, r.beg, r.end, r.strand, 'intron',
+			score=1))
+	annotated += add
+	
+	# change to frequency
+	atotal = 0
+	for f in annotated: atotal += f.score
+	for f in annotated: f.score = f.score / atotal
+	
+	d1, d2 =  lkd(rnaseq, annotated), lkd(annotated, rnaseq)
+	return d1, d2
+
 
 coding = 0
 isolated = 0
@@ -44,10 +106,11 @@ rna_supported = 0
 training = []
 
 o = open(arg.out, 'w+')
-o.write('region\tlen\ttxs\texons\trna_introns\tfit\n')
+o.write('region\tlen\ttxs\texons\trna_introns\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
 	prefix = arg.regions + '/' + region + '/' + region
+
 	# read region status from JSON
 	f = open(prefix + '.json')
 	meta = json.loads(f.read())
@@ -73,12 +136,13 @@ for region in os.listdir(arg.regions):
 			intron_support[intron.beg][intron.end] = True
 	#determine support for annotated introns
 	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
+
 	for chrom in genome:
 		supported = 0
 		tx_len = 0
 		ex_count = 0
-		genes = chrom.ftable.build_genes()
-		for tx in genes[0].transcripts():
+		gene = chrom.ftable.build_genes()[0]
+		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
 				tx_len = tx.end - tx.beg
 				ex_count = len(tx.exons)
@@ -88,10 +152,12 @@ for region in os.listdir(arg.regions):
 		if meta['introns'] == supported:
 			rna_supported += 1 
 			training.append(region)
-			glen = genes[0].end - genes[0].beg
-			tx_count = len(genes[0].transcripts())
-			o.write('{}\t{}\t{}\t{}\t{}\n'.format(region, glen, tx_count, ex_count,
-				rna_count))
+			glen = gene.end - gene.beg
+			tx_count = len(gene.transcripts())
+			# check how well annotation matches introns using new methods
+			d1, d2 = distance(region, gff, gene)
+			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, glen, tx_count,
+				ex_count, rna_count, d1, d2))
 				
 o.close()
 
@@ -99,5 +165,3 @@ r = open(arg.report, 'w+')
 r.write('coding:{}\nisolated:{}\nspliced:{}\ncanonical:{}\nsupported:{}'.format(coding,
 	isolated, spliced, canonical, rna_supported))
 r.close()
-
-
