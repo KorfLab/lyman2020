@@ -96,6 +96,34 @@ def distance(region, gff, gene):
 	convert_to_freq(annotated)
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
+def isoforms(gene, rna_introns, freq):
+	vis_introns = []
+	for f in rna_introns:
+		if f.score > freq and f.strand == gene.strand:
+			vis_introns.append(f)
+	vis_introns.sort(key = operator.attrgetter('beg'))
+	
+	# find known end points
+	begs = set()
+	ends = set()
+	for tx in gene.transcripts():
+		begs.add(tx.beg)
+		ends.add(tx.end)
+	
+	# create all transcripts
+	isoforms = 1
+	for beg in begs:
+		for end in ends:
+			overlaps = 0
+			for i in range(len(vis_introns)):
+				for j in range(i + 1, len(vis_introns)):
+					if (vis_introns[i].overlap(vis_introns[j])):
+						overlaps += 1
+						break
+			isoforms += overlaps
+	return isoforms
+	
+
 coding = 0
 isolated = 0
 spliced = 0
@@ -104,7 +132,7 @@ rna_supported = 0
 training = []
 
 o = open(arg.out, 'w+')
-o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tlkd1\tlkd2\n')
+o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tiso4\tiso6\tiso8\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
 	prefix = arg.regions + '/' + region + '/' + region
@@ -131,16 +159,19 @@ for region in os.listdir(arg.regions):
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
-		rna_introns = gff.get(type='intron')
+		rna_introns = []
 		intron_support = {}
+		for intron in chrom.ftable.features:
+			if intron.type == 'intron' and intron.source == 'RNASeq_splice' and intron.strand == gene.strand:
+				rna_count += 1
+				rna_mass += int(float(intron.score))
+				rna_introns.append(intron)
+				if intron.beg not in intron_support:
+					intron_support[intron.beg] = {}
+					intron_support[intron.beg][intron.end] = True
 		for intron in rna_introns:
-			if intron.source != 'RNASeq_splice': continue
-			if intron.strand != gene.strand: continue
-			rna_count += 1
-			rna_mass += int(float(intron.score))
-			if intron.beg not in intron_support:
-				intron_support[intron.beg] = {}
-				intron_support[intron.beg][intron.end] = True
+			intron.score /= rna_mass
+		
 		
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
@@ -156,8 +187,11 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
-				tx_count, ex_count, rna_count, rna_mass, d1, d2))
+			iso4 = isoforms(gene, rna_introns, 1e-4)
+			iso6 = isoforms(gene, rna_introns, 1e-6)
+			iso8 = isoforms(gene, rna_introns, 1e-8)
+			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
+				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
 				
 o.close()
 
