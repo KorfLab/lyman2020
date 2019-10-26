@@ -104,18 +104,21 @@ def isoforms(gene, rna_introns, freq, threshold):
 			vis_introns.append(f)
 	vis_introns.sort(key = operator.attrgetter('beg'))
 
-	# find known end points
+	# find known start/end points
 	begs = set()
 	ends = set()
 	for tx in gene.transcripts():
-		begs.add(tx.beg)
-		ends.add(tx.end)
+		first = tx.exons[0]
+		last = tx.exons[len(tx.exons)-1]
+		begs.add(first.end + 1) # a valid intron starts 1 ahead of first exon
+		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
 	m = {i:{'paths': 0, 'skip': set()} for i in range(len(vis_introns))}
 	for i in range(len(vis_introns)-1, -1, -1):
 		end = True
+		curr_intr = vis_introns[i]
 		for j in range(i + 1, len(vis_introns)):
-			if(vis_introns[j].beg - vis_introns[i].end > threshold):
+			if(vis_introns[j].beg - curr_intr.end > threshold):
 					end = False
 					if(j in m[i]['skip']): # already counted
 						continue
@@ -123,11 +126,15 @@ def isoforms(gene, rna_introns, freq, threshold):
 					m[i]['skip'].add(j)
 					m[i]['skip'] = m[i]['skip'] | m[j]['skip']
 		if(end): # base case, no introns ahead
-			# todo: check if valid end
-			m[i]['paths'] = 1
+			# must be a valid ending intron
+			m[i]['paths'] = 1 if curr_intr.end in ends else 0
 
-	# todo: return sum of all valid starting points
-	return m[0]['paths'] # the number of paths from intron 0 to the end
+	introns = 0
+	for i in range(len(vis_introns)):
+		if(vis_introns[i].beg in begs):
+			introns += m[i]['paths'] # number of paths from this intron
+
+	return introns
 
 coding = 0
 isolated = 0
