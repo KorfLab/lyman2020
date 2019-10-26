@@ -30,7 +30,7 @@ parser.add_argument('--source', required=True, type=str,
 parser.add_argument('--report', required=True, type=str,
 	metavar='<path>', help='report output filename')
 parser.add_argument('--out', required=True, type=str,
-	metavar='<path>', help='qualified region list output filename')	
+	metavar='<path>', help='qualified region list output filename')
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -73,7 +73,7 @@ def distance(region, gff, gene):
 	for tx in gene.transcripts():
 		if len(tx.introns) > 0: txs.append(tx)
 	txmass = rnamass / len(txs)
-	for tx in txs:	
+	for tx in txs:
 		iweight = txmass / (len(tx.introns))
 		for f in tx.introns:
 			f.score = iweight # not really used but maybe useful for debugging
@@ -90,39 +90,44 @@ def distance(region, gff, gene):
 				annotated[beg] = {}
 			if end not in annotated[beg]:
 				annotated[beg][end] = 1
-	
+
 	# convert to freqs and calculate distance
 	convert_to_freq(rnaseq)
 	convert_to_freq(annotated)
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
-def isoforms(gene, rna_introns, freq):
+
+def isoforms(gene, rna_introns, freq, threshold):
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
 	vis_introns.sort(key = operator.attrgetter('beg'))
-	
+
 	# find known end points
 	begs = set()
 	ends = set()
 	for tx in gene.transcripts():
 		begs.add(tx.beg)
 		ends.add(tx.end)
-	
-	# create all transcripts
-	isoforms = 1
-	for beg in begs:
-		for end in ends:
-			overlaps = 0
-			for i in range(len(vis_introns)):
-				for j in range(i + 1, len(vis_introns)):
-					if (vis_introns[i].overlap(vis_introns[j])):
-						overlaps += 1
-						break
-			isoforms += overlaps
-	return isoforms
-	
+
+	m = {i:{'paths': 0, 'skip': set()} for i in range(len(vis_introns))}
+	for i in range(len(vis_introns)-1, -1, -1):
+		end = True
+		for j in range(i + 1, len(vis_introns)):
+			if(vis_introns[j].beg - vis_introns[i].end > threshold):
+					end = False
+					if(j in m[i]['skip']): # already counted
+						continue
+					m[i]['paths'] += m[j]['paths']
+					m[i]['skip'].add(j)
+					m[i]['skip'] = m[i]['skip'] | m[j]['skip']
+		if(end): # base case, no introns ahead
+			# todo: check if valid end
+			m[i]['paths'] = 1
+
+	# todo: return sum of all valid starting points
+	return m[0]['paths'] # the number of paths from intron 0 to the end
 
 coding = 0
 isolated = 0
@@ -171,8 +176,8 @@ for region in os.listdir(arg.regions):
 					intron_support[intron.beg][intron.end] = True
 		for intron in rna_introns:
 			intron.score /= rna_mass
-		
-		
+
+
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
 				tx_len = tx.end - tx.beg
@@ -181,18 +186,18 @@ for region in os.listdir(arg.regions):
 				if (intron.beg in intron_support and
 					intron.end in intron_support[intron.beg]): supported += 1
 		if meta['introns'] == supported:
-			rna_supported += 1 
+			rna_supported += 1
 			training.append(region)
 			glen = gene.end - gene.beg
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			iso4 = isoforms(gene, rna_introns, 1e-4)
-			iso6 = isoforms(gene, rna_introns, 1e-6)
-			iso8 = isoforms(gene, rna_introns, 1e-8)
+			iso4 = isoforms(gene, rna_introns, 1e-4, 30)
+			iso6 = isoforms(gene, rna_introns, 1e-6, 30)
+			iso8 = isoforms(gene, rna_introns, 1e-8, 30)
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
-				
+
 o.close()
 
 r = open(arg.report, 'w+')
