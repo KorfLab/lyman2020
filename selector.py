@@ -114,18 +114,19 @@ def isoforms(gene, rna_introns, freq, threshold):
 		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
 	m = {i:{'paths': 0, 'skip': set()} for i in range(len(vis_introns))}
+	
 	for i in range(len(vis_introns)-1, -1, -1):
 		end = True
 		curr_intr = vis_introns[i]
 		for j in range(i + 1, len(vis_introns)):
-			if(vis_introns[j].beg - curr_intr.end > threshold):
+			if (vis_introns[j].beg - curr_intr.end > threshold):
 					end = False
 					if(j in m[i]['skip']): # already counted
 						continue
 					m[i]['paths'] += m[j]['paths']
 					m[i]['skip'].add(j)
 					m[i]['skip'] = m[i]['skip'] | m[j]['skip']
-		if(end): # base case, no introns ahead
+		if (end): # base case, no introns ahead
 			# must be a valid ending intron
 			m[i]['paths'] = 1 if curr_intr.end in ends else 0
 
