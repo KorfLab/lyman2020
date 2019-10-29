@@ -23,11 +23,88 @@ parser = argparse.ArgumentParser(
 	description='Creates a frequency distribution of intron phase variants.',
 	formatter_class=argparse.RawDescriptionHelpFormatter,
 	epilog=extended_help)
-parser.add_argument('--gff', required=True, type=str,
-	metavar='<str>', help='input GFF file')
+parser.add_argument('--regions', required=True, type=str,
+	metavar='<path>', help='directory containing region sub-directories')
+parser.add_argument('--table', required=True, type=str,
+	metavar='<path>', help='regions to examine')
 parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
 arg = parser.parse_args()
+
+debug = 0
+for region in os.listdir(arg.regions):
+	debug += 1
+	if debug == 200: sys.exit(0)
+	
+	prefix = arg.regions + '/' + region + '/' + region
+
+	# read region status from JSON
+	f = open(prefix + '.json')
+	meta = json.loads(f.read())
+	f.close()
+	
+	# skip multi-gene regions, non-coding regions, un-spliced and non-canonical genes
+	if meta['pc_genes'] != 1 or meta['nc_genes'] > 0: continue
+	if meta['introns'] == 0: continue
+	if meta['pc_issues']: continue
+
+	# memorize RNA-supported intron coordinates and count RNA-supported introns
+	gff = GFF_file(file=prefix + '.gff', source=arg.source)
+	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
+	for chrom in genome:
+		gene = chrom.ftable.build_genes()[0]
+		txs = gene.transcripts()
+		if len(txs) > 1: continue # for now, maybe address double-counting later
+		tx = txs[0]
+		if tx.strand == '-': continue # for now
+		#rna_introns = []
+		#for f in chrom.ftable.features:
+		#	if f.type == 'intron' and f.source == 'RNASeq_splice' and f.strand == gene.strand:
+		#		rna_introns.append(f)
+		for i in range(len(tx.exons) -1):
+			beg = tx.exons[i].beg
+			end = tx.exons[i+1].end
+			ibeg = tx.introns[i].beg
+			iend = tx.introns[i].end
+			count = 0
+			stuff = []
+			for f in chrom.ftable.fetch(beg, end):
+				if f.type != 'intron': continue
+				if f.source != 'RNASeq_splice': continue
+				if f.strand != tx.strand: continue
+				if f.beg < beg or f.end > end: continue
+				stuff.append(f)
+				if f.beg == ibeg and f.end == iend:
+					count += 1
+			if count == 0:
+				print(beg, end, ibeg, iend)
+				for f in stuff:
+					print(f.gff())
+				# same donor
+				
+				
+				
+		#		print(beg, end, f.gff())
+		#print("")
+		#sys.exit(0)
+		#print("")
+		
+		#print(gene.id, len(rna_introns))
+
+"""
+genome = Reader(gff=arg.gff, fasta=arg.fasta, source=arg.source)
+for chrom in genome:
+	genes = chrom.ftable.build_genes()
+	if len(genes) != 1 continue:
+	gene = genes[0]
+	if len(gene.introns) == 0: continue
+	rna_introns = []
+	for f in chrom.ftable.features:
+		if f.type == 'intron' and f.source == 'RNASeq_splice':
+			rna_introns.append
+	print(gene.name, len(rna_introns))
+
+
 
 gff = GFF_file(file=arg.gff, source=arg.source)
 
@@ -71,4 +148,5 @@ for chrom in gff.chroms:
 				shift_scores[phase_shift]['count'] += 1
 				shift_scores[phase_shift]['sum'] += score_fold
 				print('{}\t{:.3f}\t{}'.format(phase_shift, score_fold, shift_length))
-	
+
+"""
