@@ -32,58 +32,78 @@ parser.add_argument('--source', required=True, type=str,
 arg = parser.parse_args()
 
 debug = 0
-for region in os.listdir(arg.regions):
-	debug += 1
-	if debug == 200: sys.exit(0)
+with open(arg.table) as table:
+	for line in table.readlines():
+		meta = line.split('\t')
+		region = meta[0]
+		if region == 'region': continue # skip header
+		tx_count = int(float(meta[3]))
+		if tx_count != 1: continue
+		debug += 1
+		if debug == 1000: sys.exit(0)	
+		prefix = arg.regions + '/' + region + '/' + region
 	
-	prefix = arg.regions + '/' + region + '/' + region
+		# memorize RNA-supported intron coordinates and count RNA-supported introns
+		genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
+		for chrom in genome:
+			gene = chrom.ftable.build_genes()[0]
+			tx = gene.transcripts()[0]
+			for i in range(len(tx.cdss) -1):
+				beg = tx.cdss[i].beg
+				ibeg = tx.cdss[i].end + 1
+				end = tx.cdss[i+1].end
+				iend = tx.cdss[i+1].beg - 1
+				iscore = None
+				count = 0
+				acc_pos = []
+				don_pos = []
+				acc_neg = []
+				don_neg = []
+				for f in chrom.ftable.fetch(beg, end):
+					if f.type != 'intron': continue
+					if f.source != 'RNASeq_splice': continue
+					if f.strand != tx.strand: continue
+					if f.beg < beg or f.end > end: continue
+					if f.beg == ibeg and f.end == iend:
+						count += 1
+						iscore = f.score
+					elif f.beg == ibeg:
+						if gene.strand == '+':
+							print('+ acceptor variant')
+						else:
+							print('- donor variant')
+					elif f.end == iend:
+						if gene.strand == '+':
+							print('+ donor variant')
+						else:
+							print('- acceptor variant')
+""""	
+					if gene.strand == '+' and f.beg == ibeg:
+						acc_pos.append(f) # acceptor sites differ, pos strand
+					
+					if gene.strand == '-' and f.beg == ibeg:
+						don_neg.append(f) # donor sites differ, neg strand
 
-	# read region status from JSON
-	f = open(prefix + '.json')
-	meta = json.loads(f.read())
-	f.close()
-	
-	# skip multi-gene regions, non-coding regions, un-spliced and non-canonical genes
-	if meta['pc_genes'] != 1 or meta['nc_genes'] > 0: continue
-	if meta['introns'] == 0: continue
-	if meta['pc_issues']: continue
+					if gene.strand == '+' and f.end == iend:
+						don_pos.append(f) # donor sites differ, pos strand
 
-	# memorize RNA-supported intron coordinates and count RNA-supported introns
-	gff = GFF_file(file=prefix + '.gff', source=arg.source)
-	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
-	for chrom in genome:
-		gene = chrom.ftable.build_genes()[0]
-		txs = gene.transcripts()
-		if len(txs) > 1: continue # for now, maybe address double-counting later
-		tx = txs[0]
-		if tx.strand == '-': continue # for now
-		#rna_introns = []
-		#for f in chrom.ftable.features:
-		#	if f.type == 'intron' and f.source == 'RNASeq_splice' and f.strand == gene.strand:
-		#		rna_introns.append(f)
-		for i in range(len(tx.exons) -1):
-			beg = tx.exons[i].beg
-			end = tx.exons[i+1].end
-			ibeg = tx.introns[i].beg
-			iend = tx.introns[i].end
-			count = 0
-			stuff = []
-			for f in chrom.ftable.fetch(beg, end):
-				if f.type != 'intron': continue
-				if f.source != 'RNASeq_splice': continue
-				if f.strand != tx.strand: continue
-				if f.beg < beg or f.end > end: continue
-				stuff.append(f)
-				if f.beg == ibeg and f.end == iend:
-					count += 1
-			if count == 0:
-				print(beg, end, ibeg, iend)
-				for f in stuff:
-					print(f.gff())
-				# same donor
+					if gene.strand == '-' and f.end == iend:
+						acc_neg.append(f) # acceptor sites differ, neg strand
+
+				if count != 1:
+					raise Exception('number of RNASeq_splice features matching canonical intron is not one!')
+				for f in acc_pos:
+					print('acc_pos', abs(iend - f.end) % 3, abs(iend - f.end), f.score / iscore)
+				for f in don_pos:
+					print('don_pos', abs(ibeg - f.beg) % 3, abs(ibeg - f.beg), f.score / iscore)
+				for f in acc_neg:
+					print('acc_neg', abs(ibeg - f.beg) % 3, abs(ibeg - f.beg), f.score / iscore)
+				for f in don_neg:
+					print('don_neg', abs(iend - f.end) % 3, abs(iend - f.end), f.score / iscore)
 				
+
 				
-				
+			
 		#		print(beg, end, f.gff())
 		#print("")
 		#sys.exit(0)
@@ -91,7 +111,7 @@ for region in os.listdir(arg.regions):
 		
 		#print(gene.id, len(rna_introns))
 
-"""
+
 genome = Reader(gff=arg.gff, fasta=arg.fasta, source=arg.source)
 for chrom in genome:
 	genes = chrom.ftable.build_genes()
