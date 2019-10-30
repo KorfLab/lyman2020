@@ -31,6 +31,9 @@ parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
 arg = parser.parse_args()
 
+pos_genes = 0
+neg_genes = 0
+
 debug = 0
 with open(arg.table) as table:
 	for line in table.readlines():
@@ -39,14 +42,18 @@ with open(arg.table) as table:
 		if region == 'region': continue # skip header
 		tx_count = int(float(meta[3]))
 		if tx_count != 1: continue
-		debug += 1
-		if debug == 1000: sys.exit(0)	
+		#debug += 1
+		#f debug == 1000: sys.exit(0)	
 		prefix = arg.regions + '/' + region + '/' + region
 	
 		# memorize RNA-supported intron coordinates and count RNA-supported introns
 		genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
 		for chrom in genome:
 			gene = chrom.ftable.build_genes()[0]
+			if gene.strand == '+':
+				pos_genes += 1
+			else:
+				neg_genes += 1
 			tx = gene.transcripts()[0]
 			for i in range(len(tx.cdss) -1):
 				beg = tx.cdss[i].beg
@@ -67,29 +74,18 @@ with open(arg.table) as table:
 					if f.beg == ibeg and f.end == iend:
 						count += 1
 						iscore = f.score
-					elif f.beg == ibeg:
+					elif f.beg == ibeg and f.end != iend:
 						if gene.strand == '+':
-							print('+ acceptor variant')
+							acc_pos.append(f)
 						else:
-							print('- donor variant')
-					elif f.end == iend:
+							don_neg.append(f)
+					elif f.end == iend and f.beg != ibeg :
 						if gene.strand == '+':
-							print('+ donor variant')
+							don_pos.append(f)
 						else:
-							print('- acceptor variant')
-""""	
-					if gene.strand == '+' and f.beg == ibeg:
-						acc_pos.append(f) # acceptor sites differ, pos strand
-					
-					if gene.strand == '-' and f.beg == ibeg:
-						don_neg.append(f) # donor sites differ, neg strand
-
-					if gene.strand == '+' and f.end == iend:
-						don_pos.append(f) # donor sites differ, pos strand
-
-					if gene.strand == '-' and f.end == iend:
-						acc_neg.append(f) # acceptor sites differ, neg strand
-
+							acc_neg.append(f)
+					else:
+						continue
 				if count != 1:
 					raise Exception('number of RNASeq_splice features matching canonical intron is not one!')
 				for f in acc_pos:
@@ -100,17 +96,8 @@ with open(arg.table) as table:
 					print('acc_neg', abs(ibeg - f.beg) % 3, abs(ibeg - f.beg), f.score / iscore)
 				for f in don_neg:
 					print('don_neg', abs(iend - f.end) % 3, abs(iend - f.end), f.score / iscore)
-				
 
-				
-			
-		#		print(beg, end, f.gff())
-		#print("")
-		#sys.exit(0)
-		#print("")
-		
-		#print(gene.id, len(rna_introns))
-
+""""	
 
 genome = Reader(gff=arg.gff, fasta=arg.fasta, source=arg.source)
 for chrom in genome:
