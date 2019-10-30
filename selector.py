@@ -96,8 +96,19 @@ def distance(region, gff, gene):
 	convert_to_freq(annotated)
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
+def paths(i, m, v, path, file):
+	if(m[i]['next'] is None):
+		s = ''
+		for j in path:
+			s += str(v[j].beg) + ',' + str(v[j].end) + ' '
+		file.write(s[:-1] + '\n')
+		return
+	for n in m[i]['next']:
+		path.append(n)
+		paths(n, m, v, path, file)
+		path.remove(n)
 
-def isoforms(gene, rna_introns, freq, threshold):
+def isoforms(gene, rna_introns, freq, threshold, file):
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
@@ -113,8 +124,8 @@ def isoforms(gene, rna_introns, freq, threshold):
 		begs.add(first.end + 1) # a valid intron starts 1 ahead of first exon
 		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
-	m = {i:{'paths': 0, 'skip': set()} for i in range(len(vis_introns))}
-	
+	m = {i:{'paths': 0, 'skip': set(), 'next': []} for i in range(len(vis_introns))}
+
 	for i in range(len(vis_introns)-1, -1, -1):
 		end = True
 		curr_intr = vis_introns[i]
@@ -126,13 +137,16 @@ def isoforms(gene, rna_introns, freq, threshold):
 					m[i]['paths'] += m[j]['paths']
 					m[i]['skip'].add(j)
 					m[i]['skip'] = m[i]['skip'] | m[j]['skip']
+					m[i]['next'].append(j)
 		if (end): # base case, no introns ahead
 			# must be a valid ending intron
 			m[i]['paths'] = 1 if curr_intr.end in ends else 0
+			m[i]['next'] = None
 
 	introns = 0
 	for i in range(len(vis_introns)):
-		if(vis_introns[i].beg in begs):
+		if (vis_introns[i].beg in begs):
+			paths(i, m, vis_introns, [i], file) # save coords of each path to file
 			introns += m[i]['paths'] # number of paths from this intron
 
 	return introns
@@ -145,6 +159,7 @@ rna_supported = 0
 training = []
 
 o = open(arg.out, 'w+')
+iso = open('isoforms.txt', 'w+')
 o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tiso4\tiso6\tiso8\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
@@ -172,6 +187,7 @@ for region in os.listdir(arg.regions):
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
+		thr = 30 # minimum distance between introns to be valid
 		rna_introns = []
 		intron_support = {}
 		for intron in chrom.ftable.features:
@@ -184,7 +200,6 @@ for region in os.listdir(arg.regions):
 					intron_support[intron.beg][intron.end] = True
 		for intron in rna_introns:
 			intron.score /= rna_mass
-
 
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
@@ -200,9 +215,14 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			iso4 = isoforms(gene, rna_introns, 1e-4, 30)
-			iso6 = isoforms(gene, rna_introns, 1e-6, 30)
-			iso8 = isoforms(gene, rna_introns, 1e-8, 30)
+			iso.write('region: {} gid: {}\n'.format(region, gene.id))
+			iso.write('1e-4 freq paths:\n')
+			iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
+			iso.write('1e-6 freq paths:\n')
+			iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
+			iso.write('1e-8 freq paths:\n')
+			iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
+
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
 
