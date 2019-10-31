@@ -31,6 +31,8 @@ parser.add_argument('--report', required=True, type=str,
 	metavar='<path>', help='report output filename')
 parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
+parser.add_argument('--isomax', required=True, type=int,
+	metavar='<path>', help='qualified region list output filename')
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -159,7 +161,6 @@ rna_supported = 0
 training = []
 
 o = open(arg.out, 'w+')
-iso = open('isoforms.txt', 'w+')
 o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tiso4\tiso6\tiso8\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
@@ -215,13 +216,17 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-			iso.write('region: {} gid: {}\n'.format(region, gene.id))
-			iso.write('1e-4 freq paths:\n')
-			iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
-			iso.write('1e-6 freq paths:\n')
-			iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
-			iso.write('1e-8 freq paths:\n')
-			iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
+			if len(rna_introns) < arg.isomax:
+				iso = open(prefix + '.isoforms', 'w+')
+				iso.write('region: {} gid: {}\n'.format(region, gene.id))
+				iso.write('1e-4 freq paths:\n')
+				iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
+				iso.write('1e-6 freq paths:\n')
+				iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
+				iso.write('1e-8 freq paths:\n')
+				iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
+			else:
+				print('skipping', region, len(rna_introns))
 
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
