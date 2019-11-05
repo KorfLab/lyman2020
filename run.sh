@@ -4,6 +4,7 @@ python3 setup.py --fasta c_elegans.PRJNA13758.WS270.genomic.fa --gff c_elegans.P
 
 python3 selector.py --regions region --source wb.270 --report stats.txt --out table.txt --isomax 50
 
+# retrieve lines in table corresponding to first 1000 single-transcript genes
 cat table.txt | awk '{if ($4 == 1) print}' | head -n1000 > training.txt
 
 cut -f2 training.txt > training_gids.txt
