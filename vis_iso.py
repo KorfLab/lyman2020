@@ -15,11 +15,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--regions', required=True, type=str,
 	metavar='<path>', help='directory containing region sub-directories')
 parser.add_argument('--region', required=True, type=str,
-	metavar='<path>', help='region containing desired gene')
-parser.add_argument('--gid', required=True, type=str,
-	metavar='<path>', help='the id of the desired gene')
+	metavar='<num>', help='region containing desired gene')
 parser.add_argument('--threshold', required=True, type=str,
-	metavar='<path>', help='frequency threshold: 1e-4, 1e-6, or 1e-8')
+	metavar='<str>', help='frequency threshold: 1e-4, 1e-6, or 1e-8')
 parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='filename of output graphic')
 arg = parser.parse_args()
@@ -35,12 +33,10 @@ y_level = 10
 pad = 60
 height = 3
 
-ftr_target = 'region: ' + arg.region + ' gid: ' + arg.gid
 freq_target = arg.threshold + ' freq paths:'
 
 isoforms = []
 with open(ipath) as ifile:
-    start_ftr = False
     start_intrs = False
     mn = math.inf
     mx = 0
@@ -56,10 +52,8 @@ with open(ipath) as ifile:
             first, last = introns[0][0], introns[len(introns) - 1][1]
             mn = first if first < mn else mn
             mx = last if last > mx else mx
-        if(start_ftr and line == freq_target):
+        if(line == freq_target):
             start_intrs = True
-        if(line == ftr_target):
-            start_ftr = True
 # todo: coordinates
 with open(fapath) as fafile:
 	first = fafile.readline()
