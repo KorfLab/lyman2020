@@ -219,11 +219,11 @@ for region in os.listdir(arg.regions):
 			if len(rna_introns) < arg.isomax:
 				iso = open(prefix + '.isoforms', 'w+')
 				iso.write('region: {} gid: {}\n'.format(region, gene.id))
-				iso.write('@1e-4 freq paths:\n')
+				iso.write('1e-4 freq paths:\n')
 				iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
-				iso.write('@1e-6 freq paths:\n')
+				iso.write('1e-6 freq paths:\n')
 				iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
-				iso.write('@1e-8 freq paths:\n')
+				iso.write('1e-8 freq paths:\n')
 				iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
 			else:
 				print('skipping', region, len(rna_introns))

@@ -36,7 +36,7 @@ pad = 60
 height = 3
 
 ftr_target = 'region: ' + arg.region + ' gid: ' + arg.gid
-freq_target = '@' + arg.threshold + ' freq paths:'
+freq_target = arg.threshold + ' freq paths:'
 
 isoforms = []
 with open(ipath) as ifile:
@@ -47,7 +47,7 @@ with open(ipath) as ifile:
     for line in ifile:
         line = line[:-1] # remove \n
         if(start_intrs):
-            if(line[0] == '@'):
+            if('e-' in line):
                 break
             introns = [x.split(',') for x in line.split(' ')]
             for i in range(len(introns)):
