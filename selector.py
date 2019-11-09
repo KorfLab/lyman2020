@@ -98,17 +98,19 @@ def distance(region, gff, gene):
 	convert_to_freq(annotated)
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
-def paths(i, m, v, path, file):
-	if(m[i]['next'] is None):
+def paths(i, m, v, path, file): # counts paths and saves them to file
+	if(m[i]['next'] is None): # end of a valid path
 		s = ''
 		for j in path:
 			s += str(v[j].beg) + ',' + str(v[j].end) + ' '
 		file.write(s[:-1] + '\n')
-		return
+		return 1
+	ct = 0
 	for n in m[i]['next']:
 		path.append(n)
-		paths(n, m, v, path, file)
+		ct += paths(n, m, v, path, file)
 		path.remove(n)
+	return ct
 
 def isoforms(gene, rna_introns, freq, threshold, file):
 	vis_introns = []
@@ -126,7 +128,7 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 		begs.add(first.end + 1) # a valid intron starts 1 ahead of first exon
 		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
-	m = {i:{'paths': 0, 'skip': set(), 'next': []} for i in range(len(vis_introns))}
+	m = {i:{'skip': set(), 'next': []} for i in range(len(vis_introns))}
 
 	for i in range(len(vis_introns)-1, -1, -1):
 		end = True
@@ -136,21 +138,16 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 					end = False
 					if(j in m[i]['skip']): # already counted
 						continue
-					m[i]['paths'] += m[j]['paths']
 					m[i]['skip'].add(j)
 					m[i]['skip'] = m[i]['skip'] | m[j]['skip']
 					m[i]['next'].append(j)
-		if (end): # base case, no introns ahead
-			# must be a valid ending intron
-			m[i]['paths'] = 1 if curr_intr.end in ends else 0
+		if (vis_introns[i].end in ends): # base case, ending intron
 			m[i]['next'] = None
 
 	introns = 0
 	for i in range(len(vis_introns)):
 		if (vis_introns[i].beg in begs):
-			paths(i, m, vis_introns, [i], file) # save coords of each path to file
-			introns += m[i]['paths'] # number of paths from this intron
-
+			introns += paths(i, m, vis_introns, [i], file) # count and save paths
 	return introns
 
 coding = 0
