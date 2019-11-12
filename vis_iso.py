@@ -3,6 +3,7 @@ import matplotlib.patches as patches
 import math
 import argparse
 import os
+from grimoire.io import GFF_file
 
 extended_help = """
 Creates a wire diagram of isoforms of a specified gene.
@@ -19,7 +20,7 @@ parser.add_argument('--region', required=True, type=str,
 parser.add_argument('--threshold', required=True, type=str,
 	metavar='<str>', help='frequency threshold: 1e-4, 1e-6, or 1e-8')
 parser.add_argument('--out', required=True, type=str,
-	metavar='<path>', help='filename of output graphic')
+	metavar='<path>', help='filename of output graphic (.pdf, .png, .svg ... )')
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -54,29 +55,28 @@ with open(ipath) as ifile:
             mx = last if last > mx else mx
         if(line == freq_target):
             start_intrs = True
-# todo: coordinates
-with open(fapath) as fafile:
-	first = fafile.readline()
-	start = int(first.split(':')[2].split(' ')[0])
-	end = int(first.split(':')[3])
 
-start = mn - pad
-end = mx + pad
+gff = GFF_file(file=prefix + '.gff')
+
 ymax = len(isoforms) * (height + 5) + y_level
 fig, axis = plot.subplots(1)
-axis.set(xlim=(start-pad, end+pad), ylim=(0, ymax))
+axis.set( ylim=(0, ymax))
 axis.set_yticklabels([])
 axis.set_yticks([])
+
 for i in range(len(isoforms)):
     introns = isoforms[i]
     length = len(introns)
     rects = []
     boost = (height + 5) * i
-    rects.append(patches.Rectangle((start, y_level + boost), introns[0][0]-start, height, facecolor=color))
+    start = gff.get(type='exon', end=introns[0][0]-1)[0]
+    end = gff.get(type='exon', beg=introns[length-1][1]+1)[0]
+
+    rects.append(patches.Rectangle((start.beg, y_level + boost), start.end - start.beg, height, facecolor=color))
     for j in range(len(introns)-1):
         beg = introns[j][1]
         rects.append(patches.Rectangle((beg, y_level + boost), introns[j+1][0] - beg, height, facecolor=color))
-    rects.append(patches.Rectangle((introns[length-1][1], y_level + boost), end - introns[length-1][1], height, facecolor=color))
+    rects.append(patches.Rectangle((introns[length-1][1], y_level + boost), end.end - end.beg, height, facecolor=color))
     for j in range(1, len(rects)):
         left_x = rects[j-1].get_x() + rects[j-1].get_width()
         left_y = rects[j-1].get_y() + rects[j-1].get_height()
