@@ -2,8 +2,9 @@
 
 import argparse
 import sys
+import os
 import json
-import copy
+#import copy
 
 import grimoire.toolbox as toolbox
 import grimoire.hmm as hmm
@@ -45,44 +46,182 @@ class MilwaError(Exception):
 ## Globals ##
 #############
 
-## state arrays ##
-don5 = [0, 2]    # add more later
-don3 = [2, 6]    # add more later
-don_ctx_max = 2  # maximum donor emission order
-acc5 = [2, 8]    # add more later
-acc3 = [0, 2]    # add more later
-acc_ctx_max = 2  # maximum acceptor emission order
-flank5 = [5, 10, 15]
-flank3 = [5, 10, 15]
-
 ## single states ##
-gen_ctx_max = 5
+
 int_ctx_max = 5
 exon_ctx_max = 5
-cds_ctx_max = 5
 u5_ctx_max = 3
 u3_ctx_max = 3
 
+gen_ctx_max = 5
+cds_ctx_max = 2
 
-gen_seqs = []
-int_seqs = []
-don_seqs = []
-acc_seqs = []
-exon_seqs = []
-cds_seqs = []
-up_seqs = []
-down_seqs = []
-utr5_seqs = []
-utr3_seqs = []
-gen_len = 0
-exon_len = 0
-splices = 0
-intron_len = 0
-mRNAs = 0
+## state arrays ##
+sparam = {
+	'DON': {'o5':[0, 2], 'o3':[2, 6], 'ctx': [0, 1]},
+	'ACC': {'o5':[2, 8], 'o3':[0, 2], 'ctx': [0, 1]},
+	'KOZ': {'o5':[10],   'o3':[3],    'ctx':[0]},
+	'TER': {'o5':[3],    'o3':[10],   'ctx':[0]},
+}
 
-genome = Reader(fasta=arg.fasta, gff=arg.gff)
-for chr in genome:
-	genes = chr.ftable.build_genes()
+def train_genomic(ctx):
+	state = hmm.null_state_factory(file=arg.fasta, context=ctx)
+	state.name = 'GEN'
+	path = '{}/{}-{}.json'.format(arg.dir, 'GEN', ctx)
+	with open(path, 'w+') as file:
+		file.write(state.to_json())
+
+def train_state(genes, type, ctx):
+	seqs = []
+	for gene in genes:
+		for tx in gene.transcripts():
+			features = None
+			if   type == 'INT':  features = tx.introns
+			elif type == 'EXON': features = tx.exons
+			elif type == 'UTR5': features = tx.utr5s
+			elif type == 'UTR3': features = tx.utr3s
+			for f in features:
+				seqs.append({'seq' : f.seq_str(), 'weight' : 1})
+					
+	em = hmm.train_emission(seqs, context=ctx)
+	state = hmm.State(name=type, context=ctx, emits=em)
+	path = '{}/{}-{}.json'.format(arg.dir, type, ctx)
+	with open(path, 'w+') as file:
+		file.write(state.to_json())
+
+def train_cds_state(genes,  ctx):
+	seqs = []
+	for gene in genes:
+		for tx in gene.transcripts():
+			seqs.append({'seq' : tx.cds_str()[3:-3], 'weight' : 1})
+			
+	em = hmm.train_cds(seqs, context=ctx)
+	state = hmm.State(name='CDS', context=ctx, emits=em)
+	path = '{}/{}-{}.json'.format(arg.dir, 'CDS', ctx)
+	with open(path, 'w+') as file:
+		file.write(state.to_json())
+
+def train_state_array(genes, type, o5, o3, ctx):
+	seqs = []
+	for gene in genes:
+		for tx in gene.transcripts():
+			if type == 'DON':
+				for intron in tx.introns:
+					ilen = o5 + o3
+					iseq = intron.seq_str(off5=-o5)[0:ilen]
+					seqs.append({'seq':iseq, 'weight':1})
+			elif type == 'ACC':
+				for intron in tx.introns:
+					ilen = o5 + o3
+					iseq = intron.seq_str(off3=o3)[-ilen:]
+					seqs.append({'seq':iseq, 'weight':1})
+			elif type == 'KOZ':
+				cds = None
+				if tx.strand == '+': cds = tx.cdss[0]
+				else:                cds = tx.cdss[-1]
+				if o3 > cds.end - cds.beg +1:
+					continue # split start codon
+				seqs.append({'seq':cds.seq_str(off5=-o5)[0:o5+o3], 'weight':1})
+			elif type == 'TER':
+				cds = None
+				if tx.strand == '+': cds = tx.cdss[-1]
+				else:                cds = tx.cdss[0]
+				if o5 > cds.end - cds.beg +1:
+					continue # split stop codon
+				s = cds.seq_str(off3=o3)[-(o5+o3):]
+				seqs.append({'seq':s, 'weight':1})
+
+	em = hmm.train_emissions(seqs, context=ctx)
+	states = hmm.state_factory(type, em)
+	
+	path = '{}/{}-{}-{}-{}.json'.format(arg.dir, type, o5, o3, ctx)
+	with open(path, 'w+') as file:
+		file.write(json.dumps(states, indent=4, cls=hmm.HMMdecoder))
+
+if __name__ == '__main__':
+
+	if not os.path.exists(arg.dir):
+		os.mkdir(arg.dir)
+
+	# stats
+	stats = {
+		'genomic_length'   : 0,
+		'chromosome_count' : 0,
+		'gene_count'       : 0,
+		'gene_length'      : 0,
+		'intron_length'    : 0,
+		'intron_count'     : 0,
+		'exon_length'      : 0,
+		'exon_count'       : 0,
+		'utr5_length'      : 0,
+		'utr5_count'       : 0,
+		'utr3_length'      : 0,
+		'utr3_count'       : 0,
+		'cds_length'       : 0,
+		'cds_count'        : 0,
+	}
+
+	# genomic state
+	for ctx in range(gen_ctx_max +1): train_genomic(ctx)
+	
+	# setup
+	genes = []
+	genome = Reader(fasta=arg.fasta, gff=arg.gff)
+	for chr in genome:
+		genes += chr.ftable.build_genes()
+		stats['genomic_length'] += len(chr.seq)
+		stats['chromosome_count'] += 1
+
+	# simple states
+	for ctx in range(int_ctx_max +1):  train_state(genes, 'INT', ctx)
+	for ctx in range(exon_ctx_max +1): train_state(genes, 'EXON', ctx)
+	for ctx in range(u5_ctx_max +1):   train_state(genes, 'UTR5', ctx)
+	for ctx in range(u3_ctx_max +1):   train_state(genes, 'UTR3', ctx)
+	
+	# coding states
+	for ctx in range(cds_ctx_max +1): train_cds_state(genes, ctx)	
+	
+	# state arrays
+	for name in sparam:
+		for o5 in sparam[name]['o5']:
+			for o3 in sparam[name]['o3']:
+				for ctx in sparam[name]['ctx']:
+					train_state_array(genes, name, o5, o3, ctx)
+	
+	# stats
+	for gene in genes:
+		stats['gene_count'] += 1
+		stats['gene_length'] += gene.end - gene.beg + 1
+		for tx in gene.transcripts():
+			for f in tx.introns:
+				stats['intron_length'] += f.end - f.beg + 1
+				stats['intron_count'] += 1
+			for f in tx.exons:
+				stats['exon_length'] += f.end - f.beg + 1
+				stats['exon_count'] += 1
+			for f in tx.utr5s:
+				stats['utr5_length'] += f.end - f.beg + 1
+				stats['utr5_count'] += 1
+			for f in tx.utr3s:
+				stats['utr3_length'] += f.end - f.beg + 1
+				stats['utr3_count'] += 1
+			stats['cds_count'] += 1
+			stats['cds_length'] += len(tx.cds_str())
+	path = '{}/{}'.format(arg.dir, 'stats.json')
+	with open(path, 'w+') as file:
+		file.write(json.dumps(stats, indent=4))
+	
+# are sequences getting reverse-complimented before counting? how smart were we?
+	
+
+
+"""	
+## 
+	
+	
+	# donors
+
+
 
 
 
@@ -110,7 +249,9 @@ for chr in genome:
 				splices += 1
 
 
-"""		
+
+
+	
 	gen_emits  = hmm.train_emission(gen_seqs,   context=arg.gen_ctx)
 	exon_emits = hmm.train_emission(exon_seqs,  context=arg.exon_ctx)
 	don_emits  = hmm.train_emissions(don_seqs,  context=arg.don_ctx)
