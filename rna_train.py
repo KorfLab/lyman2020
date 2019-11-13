@@ -123,12 +123,11 @@ if __name__ == '__main__':
 					train_state_array(flist, name, o5, o3, ctx)
 	
 	# stats
-	for chrom in genome:
-		for f in chrom.ftable:
-			if arg.weight == 'wb.270':
-				if f.type == 'intron' and f.source == 'RNASeq_splice':
-					stats['intron_length'] += f.end - f.beg + 1
-					stats['intron_count']  += f.score
+	for f in flist:
+		if arg.weight == 'wb.270':
+			if f.type == 'intron' and f.source == 'RNASeq_splice':
+				stats['intron_length'] += f.end - f.beg + 1
+				stats['intron_count']  += f.score
 	
 	path = '{}/{}-{}.json'.format(arg.dir, 'stats', arg.weight)
 	with open(path, 'w+') as file:
