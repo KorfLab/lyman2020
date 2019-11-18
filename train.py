@@ -30,8 +30,6 @@ parser.add_argument('--gff', required=True, type=str,
 	metavar='<path>', help='path to GFF (or related) file')
 parser.add_argument('--dir', required=True, type=str,
 	metavar='<path>', help='path to directory containing JSON output files')
-parser.add_argument('--weight', required=False, type=str,
-	help='method for weighting sequence of gff objects')
 arg = parser.parse_args()
 
 ###############
@@ -54,6 +52,7 @@ u5_ctx_max = 3
 u3_ctx_max = 3
 
 gen_ctx_max = 5
+null_ctx_max = 5
 cds_ctx_max = 2
 
 ## state arrays ##
@@ -64,10 +63,10 @@ sparam = {
 	'TER': {'o5':[3],    'o3':[10],   'ctx':[0]},
 }
 
-def train_genomic(ctx):
+def train_genomic(ctx, name):
 	state = hmm.null_state_factory(file=arg.fasta, context=ctx)
-	state.name = 'GEN'
-	path = '{}/{}-{}.json'.format(arg.dir, 'GEN', ctx)
+	state.name = name
+	path = '{}/{}-genomic-{}.json'.format(arg.dir, name, ctx)
 	with open(path, 'w+') as file:
 		file.write(state.to_json())
 
@@ -85,7 +84,7 @@ def train_state(genes, type, ctx):
 					
 	em = hmm.train_emission(seqs, context=ctx)
 	state = hmm.State(name=type, context=ctx, emits=em)
-	path = '{}/{}-{}.json'.format(arg.dir, type, ctx)
+	path = '{}/{}-gene_models-{}.json'.format(arg.dir, type, ctx)
 	with open(path, 'w+') as file:
 		file.write(state.to_json())
 
@@ -97,7 +96,7 @@ def train_cds_state(genes,  ctx):
 			
 	em = hmm.train_cds(seqs, context=ctx)
 	state = hmm.State(name='CDS', context=ctx, emits=em)
-	path = '{}/{}-{}.json'.format(arg.dir, 'CDS', ctx)
+	path = '{}/{}-gene_models-{}.json'.format(arg.dir, 'CDS', ctx)
 	with open(path, 'w+') as file:
 		file.write(state.to_json())
 
@@ -134,7 +133,7 @@ def train_state_array(genes, type, o5, o3, ctx):
 	em = hmm.train_emissions(seqs, context=ctx)
 	states = hmm.state_factory(type, em)
 	
-	path = '{}/{}-{}-{}-{}.json'.format(arg.dir, type, o5, o3, ctx)
+	path = '{}/{}-gene_models-{}-{}-{}.json'.format(arg.dir, type, o5, o3, ctx)
 	with open(path, 'w+') as file:
 		file.write(json.dumps(states, indent=4, cls=hmm.HMMdecoder))
 
@@ -162,7 +161,10 @@ if __name__ == '__main__':
 	}
 
 	# genomic state
-	for ctx in range(gen_ctx_max +1): train_genomic(ctx)
+	for ctx in range(gen_ctx_max +1): train_genomic(ctx, 'GEN')
+	
+	# null state
+	for ctx in range(null_ctx_max +1): train_genomic(ctx, 'NULL')
 	
 	# setup
 	genes = []

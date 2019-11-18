@@ -34,7 +34,7 @@ parser.add_argument('--gff', required=True, type=str,
 	metavar='<path>', help='path to GFF (or related) file')
 parser.add_argument('--dir', required=True, type=str,
 	metavar='<path>', help='path to directory containing JSON output files')
-parser.add_argument('--weight', required=True, type=str,
+parser.add_argument('--method', required=True, type=str,
 	metavar='<str>', help='method for weighting sequence of gff objects')
 arg = parser.parse_args()
 
@@ -63,7 +63,7 @@ sparam = {
 def train_state(features, type, ctx):
 	seqs = []
 	for f in features:
-		if type == 'INT' and arg.weight == 'wb.270':
+		if type == 'INT' and arg.method == 'RNASeq_splice':
 			if f.type == 'intron' and f.source == 'RNASeq_splice':
 				seqs.append({'seq' : f.seq_str(), 'weight' : f.score})
 		else:
@@ -71,18 +71,18 @@ def train_state(features, type, ctx):
 
 	em = hmm.train_emission(seqs, context=ctx)
 	state = hmm.State(name=type, context=ctx, emits=em)
-	path = '{}/{}-{}-{}.json'.format(arg.dir, type, ctx, arg.weight)
+	path = '{}/{}-{}-{}.json'.format(arg.dir, type, arg.method, ctx)
 	with open(path, 'w+') as file:
 		file.write(state.to_json())
 
 def train_state_array(features, type, o5, o3, ctx):
 	seqs = []
 	for f in features:
-		if type == 'DON' and arg.weight == 'wb.270':
+		if type == 'DON' and arg.method == 'RNASeq_splice':
 			if f.type == 'intron' and f.source == 'RNASeq_splice':
 					iseq = f.seq_str(off5=-o5)[0:o5+o3]
 					seqs.append({'seq':iseq, 'weight':f.score})
-		elif type == 'ACC' and arg.weight == 'wb.270':
+		elif type == 'ACC' and arg.method == 'RNASeq_splice':
 			if f.type == 'intron' and f.source == 'RNASeq_splice':
 				iseq = f.seq_str(off3=o3)[-(o5 + o3):]
 				seqs.append({'seq':iseq, 'weight':f.score})
@@ -92,7 +92,7 @@ def train_state_array(features, type, o5, o3, ctx):
 	em = hmm.train_emissions(seqs, context=ctx)
 	states = hmm.state_factory(type, em)
 	
-	path = '{}/{}-{}-{}-{}-{}.json'.format(arg.dir, type, o5, o3, ctx, arg.weight)
+	path = '{}/{}-{}-{}-{}-{}.json'.format(arg.dir, type, arg.method, o5, o3, ctx)
 	with open(path, 'w+') as file:
 		file.write(json.dumps(states, indent=4, cls=hmm.HMMdecoder))
 
@@ -100,12 +100,18 @@ if __name__ == '__main__':
 
 	if not os.path.exists(arg.dir):
 		os.mkdir(arg.dir)
-
-	# stats
-	stats = {
-		'intron_length'    : 0,
-		'intron_count'     : 0,
-	}
+	stats = None
+	if not os.path.exists(arg.dir + '/stats.json'):
+		stats = {
+			'intron_length_{}'.format(arg.method)    : 0,
+			'intron_count_{}'.format(arg.method)     : 0,
+		}
+	else:
+		with open(arg.dir + '/stats.json') as file:
+			jstr = file.read()
+			stats = json.loads(jstr)
+		stats['intron_length_{}'.format(arg.method)] = 0
+		stats['intron_count_{}'.format(arg.method)] = 0
 
 	genome = Reader(fasta=arg.fasta, gff=arg.gff)
 	flist = []
@@ -124,12 +130,11 @@ if __name__ == '__main__':
 	
 	# stats
 	for f in flist:
-		if arg.weight == 'wb.270':
+		if arg.method == 'RNASeq_splice':
 			if f.type == 'intron' and f.source == 'RNASeq_splice':
-				stats['intron_length'] += f.end - f.beg + 1
-				stats['intron_count']  += f.score
+				stats['intron_length_{}'.format(arg.method)] += f.end - f.beg + 1
+				stats['intron_count_{}'.format(arg.method)]  += f.score
 	
-	path = '{}/{}-{}.json'.format(arg.dir, 'stats', arg.weight)
-	with open(path, 'w+') as file:
+	with open(arg.dir + '/stats.json', 'w+') as file:
 		file.write(json.dumps(stats, indent=4))
 	
