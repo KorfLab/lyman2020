@@ -99,6 +99,7 @@ def distance(region, gff, gene):
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
 def paths(i, m, v, path, file): # counts paths and saves them to file
+	#print(path)
 	if(m[i]['next'] is None): # end of a valid path
 		s = ''
 		for j in path:
@@ -127,6 +128,17 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 		last = tx.exons[len(tx.exons)-1]
 		begs.add(first.end + 1) # a valid intron starts 1 ahead of first exon
 		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
+
+	new_vis = []
+	delete = {i:0 for i in new_vis}
+	for i in range(len(vis_introns)-1):
+		good = False
+		for end in ends:
+			good = not (vis_introns[i].end > end)
+		if(good):
+			new_vis.append(vis_introns[i])
+
+	vis_introns = new_vis
 
 	m = {i:{'skip': set(), 'next': []} for i in range(len(vis_introns))}
 
@@ -217,10 +229,13 @@ for region in os.listdir(arg.regions):
 				iso = open(prefix + '.isoforms', 'w+')
 				iso.write('region: {} gid: {}\n'.format(region, gene.id))
 				iso.write('1e-4 freq paths:\n')
+				#print("iso4")
 				iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
 				iso.write('1e-6 freq paths:\n')
+				#print("iso6")
 				iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
 				iso.write('1e-8 freq paths:\n')
+				#print("iso8")
 				iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
 			else:
 				print('skipping', region, len(rna_introns))
@@ -234,3 +249,5 @@ r = open(arg.report, 'w+')
 r.write('coding:{}\nisolated:{}\nspliced:{}\ncanonical:{}\nsupported:{}'.format(coding,
 	isolated, spliced, canonical, rna_supported))
 r.close()
+#!/usr/bin/env python3
+
