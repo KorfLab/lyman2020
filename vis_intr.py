@@ -101,6 +101,9 @@ for chrom in genome:
 			ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
 
+		begs = sorted(list(begs))
+		ends = sorted(list(ends))
+
 		new_vis = []
 		for end in ends:
 			for i in range(len(vis_introns)-1):
