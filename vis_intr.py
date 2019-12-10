@@ -21,7 +21,7 @@ from grimoire.genome import Reader
 
 extended_help = """
 View the visible introns for a region and frequency threshold. Blue indicates a
-valid intron, and red is invalid.
+valid intron, and red is invalid. Green lines are annotated beginnings (end of the first exon), and purple lines are known endings..
 """
 
 parser = argparse.ArgumentParser(
