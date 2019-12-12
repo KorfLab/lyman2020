@@ -128,6 +128,9 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 		begs.add(first.end + 1) # a valid intron starts 1 ahead of first exon
 		ends.add(last.beg - 1)  # and ends 1 behind the start of last exon
 
+	begs = sorted(list(begs))
+	ends = sorted(list(ends))
+
 	new_vis = []
 	for i in range(len(vis_introns)):
 		good = False
