@@ -24,6 +24,8 @@ parser.add_argument('--threshold', required=True, type=str,
 	metavar='<str>', help='frequency threshold: 1e-4, 1e-6, or 1e-8')
 parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='filename of output graphic (.pdf, .png, .svg ... )')
+parser.add_argument('--txt', required=False, type=str,
+	metavar='<path>', help='text file of isoform counts')
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -75,6 +77,9 @@ axis.set_yticks([])
 axis.set( xlim=(gff.get(type='exon', end=mn-1)[0].beg-pad, gff.get(type='exon', beg=mx+1)[0].end+pad))
 freq_x = plot.gca().get_xlim()[1] + 10
 
+if arg.txt:
+	txtfh = open(arg.txt, 'w+')
+
 for i in range(len(isoforms)):
 	introns = isoforms[i][0]
 	freq = isoforms[i][1]
@@ -103,9 +108,11 @@ for i in range(len(isoforms)):
 	axis.add_patch(last)
 	freq_y = last.get_y()
 	plot.text(freq_x, freq_y, str(isoforms[i][1]), fontsize=6)
+	if arg.txt:
+		txtfh.write(str(isoforms[i][1]) + '\n')
 	plot.plot([last.get_x() + last.get_width(), freq_x], [last.get_y() + last.get_height()/2, last.get_y() + last.get_height()/2],
 	linestyle='dotted', color='grey')
 
-plot.show()
+#plot.show()
 
 plot.savefig(arg.out, dpi=400)
