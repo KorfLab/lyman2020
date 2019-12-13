@@ -22,7 +22,7 @@ parser.add_argument('--region', required=True, type=str,
 	metavar='<num>', help='region containing desired gene')
 parser.add_argument('--threshold', required=True, type=str,
 	metavar='<str>', help='frequency threshold: 1e-4, 1e-6, or 1e-8')
-parser.add_argument('--out', required=True, type=str,
+parser.add_argument('--out', required=False, type=str,
 	metavar='<path>', help='filename of output graphic (.pdf, .png, .svg ... )')
 parser.add_argument('--txt', required=False, type=str,
 	metavar='<path>', help='text file of isoform counts')
@@ -89,30 +89,32 @@ for i in range(len(isoforms)):
 	start = gff.get(type='exon', end=introns[0][0]-1)[0]
 	end = gff.get(type='exon', beg=introns[length-1][1]+1)[0]
 	
-	rects.append(patches.Rectangle((start.beg, y_level + boost), start.end - start.beg, height, facecolor=color))
-	for j in range(len(introns)-1):
-		beg = introns[j][1]
-		rects.append(patches.Rectangle((beg, y_level + boost), introns[j+1][0] - beg, height, facecolor=color))
-	rects.append(patches.Rectangle((introns[length-1][1], y_level + boost), end.end - end.beg, height, facecolor=color))
-	for j in range(1, len(rects)):
-		left_x = rects[j-1].get_x() + rects[j-1].get_width()
-		left_y = rects[j-1].get_y() + rects[j-1].get_height()
-		right_x = rects[j].get_x()
-		right_y = rects[j].get_y() + rects[j].get_height()
-		mid_x = (right_x + left_x) / 2
-		mid_y = right_y + 2
-		axis.add_patch(rects[j-1])
-		plot.plot([left_x, mid_x],[left_y, mid_y],'k-', linewidth=0.5)
-		plot.plot([mid_x, right_x],[mid_y, right_y],'k-', linewidth=0.5)
-	last = rects[len(rects)-1]
-	axis.add_patch(last)
-	freq_y = last.get_y()
-	plot.text(freq_x, freq_y, str(isoforms[i][1]), fontsize=6)
 	if arg.txt:
 		txtfh.write(str(isoforms[i][1]) + '\n')
-	plot.plot([last.get_x() + last.get_width(), freq_x], [last.get_y() + last.get_height()/2, last.get_y() + last.get_height()/2],
-	linestyle='dotted', color='grey')
+	
+	if arg.out:	
+		rects.append(patches.Rectangle((start.beg, y_level + boost), start.end - start.beg, height, facecolor=color))
+		for j in range(len(introns)-1):
+			beg = introns[j][1]
+			rects.append(patches.Rectangle((beg, y_level + boost), introns[j+1][0] - beg, height, facecolor=color))
+		rects.append(patches.Rectangle((introns[length-1][1], y_level + boost), end.end - end.beg, height, facecolor=color))
+		for j in range(1, len(rects)):
+			left_x = rects[j-1].get_x() + rects[j-1].get_width()
+			left_y = rects[j-1].get_y() + rects[j-1].get_height()
+			right_x = rects[j].get_x()
+			right_y = rects[j].get_y() + rects[j].get_height()
+			mid_x = (right_x + left_x) / 2
+			mid_y = right_y + 2
+			axis.add_patch(rects[j-1])
+			plot.plot([left_x, mid_x],[left_y, mid_y],'k-', linewidth=0.5)
+			plot.plot([mid_x, right_x],[mid_y, right_y],'k-', linewidth=0.5)
+		last = rects[len(rects)-1]
+		axis.add_patch(last)
+		freq_y = last.get_y()
 
-#plot.show()
+		plot.text(freq_x, freq_y, str(isoforms[i][1]), fontsize=6)
+		plot.plot([last.get_x() + last.get_width(), freq_x], [last.get_y() + last.get_height()/2, last.get_y() + last.get_height()/2],
+		linestyle='dotted', color='grey')
 
-plot.savefig(arg.out, dpi=400)
+if arg.out:
+	plot.savefig(arg.out, dpi=400)
