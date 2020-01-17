@@ -98,21 +98,31 @@ def distance(region, gff, gene):
 	convert_to_freq(annotated)
 	return lkd(rnaseq, annotated), lkd(annotated, rnaseq)
 
-def paths(i, m, v, path, file): # counts paths and saves them to file
-	if(m[i]['next'] is None): # end of a valid path
+def fold(a, b):
+	return a/b if a > b else b/a
+
+def paths(i, m, v, path, fold_thr, file): # counts paths and saves them to file
+	if (m[i]['next'] is None): # end of a valid path
+		tot_expr = 0 # want to find mean expression of introns in this path
 		s = ''
 		for j in path:
-			s += str(v[j].beg) + ',' + str(v[j].end) + ' '
+			tot_expr += v[j].score
+		mean_expr = tot_expr /  len(path)
+
+		for j in path:
+			if(fold(v[j].score, mean_expr) < fold_thr):
+				s += str(v[j].beg) + ',' + str(v[j].end) + ' '
+
 		file.write(s[:-1] + '\n')
 		return 1
 	ct = 0
 	for n in m[i]['next']:
 		path.append(n)
-		ct += paths(n, m, v, path, file)
+		ct += paths(n, m, v, path, fold_thr, file)
 		path.remove(n)
 	return ct
 
-def isoforms(gene, rna_introns, freq, threshold, file):
+def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
@@ -146,7 +156,7 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 		end = True
 		curr_intr = vis_introns[i]
 		for j in range(i + 1, len(vis_introns)):
-			if (vis_introns[j].beg - curr_intr.end > threshold):
+			if (vis_introns[j].beg - curr_intr.end > dist_thr):
 					end = False
 					if(j in m[i]['skip']): # already counted
 						continue
@@ -159,7 +169,7 @@ def isoforms(gene, rna_introns, freq, threshold, file):
 	introns = 0
 	for i in range(len(vis_introns)):
 		if (vis_introns[i].beg in begs):
-			introns += paths(i, m, vis_introns, [i], file) # count and save paths
+			introns += paths(i, m, vis_introns, [i], fold_thr, file) # count and save paths
 	return introns
 
 coding = 0
@@ -197,7 +207,8 @@ for region in os.listdir(arg.regions):
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
-		thr = 30 # minimum distance between introns to be valid
+		dist_thr = 30 # minimum distance between introns to be valid
+		fold_thr = 5  # introns must be within k-fold of the mean expression level
 		rna_introns = []
 		intron_support = {}
 		for intron in chrom.ftable.features:
@@ -229,11 +240,11 @@ for region in os.listdir(arg.regions):
 				iso = open(prefix + '.isoforms', 'w+')
 				iso.write('region: {} gid: {}\n'.format(region, gene.id))
 				iso.write('1e-4 freq paths:\n')
-				iso4 = isoforms(gene, rna_introns, 1e-4, thr, iso)
+				iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso)
 				iso.write('1e-6 freq paths:\n')
-				iso6 = isoforms(gene, rna_introns, 1e-6, thr, iso)
+				iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso)
 				iso.write('1e-8 freq paths:\n')
-				iso8 = isoforms(gene, rna_introns, 1e-8, thr, iso)
+				iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso)
 			else:
 				print('skipping', region, len(rna_introns))
 
