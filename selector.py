@@ -101,7 +101,7 @@ def distance(region, gff, gene):
 def fold(a, b):
 	return a/b if a > b else b/a
 
-def paths(i, m, v, path, fold_thr, file): # counts paths and saves them to file
+def paths(i, m, v, path, fold_thr, done, file): # counts paths and saves them to file
 	if (m[i]['next'] is None): # end of a valid path
 		tot_expr = 0 # want to find mean expression of introns in this path
 		s = ''
@@ -113,12 +113,14 @@ def paths(i, m, v, path, fold_thr, file): # counts paths and saves them to file
 			if(fold(v[j].score, mean_expr) < fold_thr):
 				s += str(v[j].beg) + ',' + str(v[j].end) + ' '
 
-		file.write(s[:-1] + '\n')
-		return 1
+		if(s not in done): # avoids duplicates
+			file.write(s[:-1] + '\n')
+			done.append(s)
+		return 1 # add to isoform count
 	ct = 0
 	for n in m[i]['next']:
 		path.append(n)
-		ct += paths(n, m, v, path, fold_thr, file)
+		ct += paths(n, m, v, path, fold_thr, done, file)
 		path.remove(n)
 	return ct
 
@@ -169,7 +171,8 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 	introns = 0
 	for i in range(len(vis_introns)):
 		if (vis_introns[i].beg in begs):
-			introns += paths(i, m, vis_introns, [i], fold_thr, file) # count and save paths
+			done = []
+			introns += paths(i, m, vis_introns, [i], fold_thr, done, file) # count and save paths
 	return introns
 
 coding = 0
