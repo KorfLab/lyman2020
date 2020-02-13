@@ -102,6 +102,7 @@ def fold(a, b):
 	return a/b if a > b else b/a
 
 def paths(i, m, v, path, fold_thr, done, file): # counts paths and saves them to file
+
 	if (m[i]['next'] is None): # end of a valid path
 		tot_expr = 0 # want to find mean expression of introns in this path
 		s = ''
@@ -142,7 +143,6 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 
 	begs = sorted(list(begs))
 	ends = sorted(list(ends))
-
 	new_vis = []
 	for i in range(len(vis_introns)):
 		good = False
@@ -168,12 +168,12 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 		if (vis_introns[i].end in ends): # base case, ending intron
 			m[i]['next'] = None
 
-	introns = 0
+	isoforms = 0
+	done = []
 	for i in range(len(vis_introns)):
 		if (vis_introns[i].beg in begs):
-			done = []
-			introns += paths(i, m, vis_introns, [i], fold_thr, done, file) # count and save paths
-	return introns
+			isoforms += paths(i, m, vis_introns, [i], fold_thr, done, file) # count and save paths
+	return isoforms
 
 coding = 0
 isolated = 0
@@ -186,6 +186,7 @@ o = open(arg.out, 'w+')
 o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tiso4\tiso6\tiso8\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
+
 	prefix = arg.regions + '/' + region + '/' + region
 
 	# read region status from JSON
