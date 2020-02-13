@@ -25,6 +25,8 @@ parser = argparse.ArgumentParser(
 	epilog=extended_help)
 parser.add_argument('--regions', required=True, type=str,
 	metavar='<path>', help='directory containing region sub-directories')
+parser.add_argument('--isomode', required=True, type=str,
+	metavar='<str>', help='"paths": piece together introns into isoforms. "overlaps": estimate isoform count based on overlapping introns.')
 parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
 parser.add_argument('--report', required=True, type=str,
@@ -33,6 +35,7 @@ parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
 parser.add_argument('--isomax', required=True, type=int,
 	metavar='<path>', help='qualified region list output filename')
+
 arg = parser.parse_args()
 
 if not os.path.exists(arg.regions):
@@ -125,7 +128,7 @@ def paths(i, m, v, path, fold_thr, done, file): # counts paths and saves them to
 		path.remove(n)
 	return ct
 
-def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
+def _isoforms_paths(gene, rna_introns, freq, dist_thr, fold_thr, file, mode):
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
@@ -173,6 +176,32 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 	for i in range(len(vis_introns)):
 		if (vis_introns[i].beg in begs):
 			isoforms += paths(i, m, vis_introns, [i], fold_thr, done, file) # count and save paths
+	return isoforms
+	
+def _isoforms_overlaps(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff):
+	vis_introns = []
+	for f in rna_introns:
+		if f.score > freq and f.strand == gene.strand:
+			vis_introns.append(f)
+	vis_introns.sort(key = operator.attrgetter('beg'))
+	print(" ( VISIBLE ) ")
+	for v in vis_introns:
+		print(str(v.beg) + ", " + str(v.end))
+	for v in vis_introns:
+		print(" overlapping: " + str(v.beg) + ", " + str(v.end))
+		ovl = gff.get(type='intron', beg=v.beg, end=v.end)
+		for o in ovl:
+			print(str(o.beg) + ", " + str(o.end))
+
+
+def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff):
+	if(mode == 'paths'):
+		isoforms = _isoforms_paths(gene, rna_introns, freq, dist_thr, fold_thr, file, mode)
+	elif(mode == 'overlaps'):
+		print("===== GENE " + gene.id + " ===== ")
+		isoforms = _isoforms_overlaps(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff)
+	else:
+		raise Exception('invalid isoform mode.')
 	return isoforms
 
 coding = 0
@@ -244,11 +273,11 @@ for region in os.listdir(arg.regions):
 				iso = open(prefix + '.isoforms', 'w+')
 				iso.write('region: {} gid: {}\n'.format(region, gene.id))
 				iso.write('1e-4 freq paths:\n')
-				iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso)
+				iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso, arg.isomode, gff)
 				iso.write('1e-6 freq paths:\n')
-				iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso)
+				iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso, arg.isomode, gff)
 				iso.write('1e-8 freq paths:\n')
-				iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso)
+				iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso, arg.isomode, gff)
 			else:
 				print('skipping', region, len(rna_introns))
 
