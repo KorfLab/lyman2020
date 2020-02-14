@@ -187,11 +187,29 @@ def _isoforms_overlaps(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, 
 	print(" ( VISIBLE ) ")
 	for v in vis_introns:
 		print(str(v.beg) + ", " + str(v.end))
-	for v in vis_introns:
-		print(" overlapping: " + str(v.beg) + ", " + str(v.end))
-		ovl = gff.get(type='intron', beg=v.beg, end=v.end)
-		for o in ovl:
-			print(str(o.beg) + ", " + str(o.end))
+	
+	chunks = [[]] #groups of overlapping introns
+	i = 1
+	ct = 0
+	while i < len(vis_introns):
+		chunks[ct].append(vis_introns[i-1])
+		while vis_introns[i-1].overlap(vis_introns[i]):
+			print(" overlapping " + str(i-1) + ": " + str(vis_introns[i].beg) + ", " + str(vis_introns[i].end))
+			chunks[ct].append(vis_introns[i])
+			i += 1
+			if i >= len(vis_introns): break
+		ct += 1	
+		i += 1
+		chunks.append([])
+
+	isoforms = 1 # estimate isoform count by multiplying number of introns in each overlapping chunk
+	for ch in chunks:
+		print("=== GROUP ===")
+		for i in range(len(ch)):
+			print("(" + str(ch[i].beg) + ", " + str(ch[i].end) + ")")
+		isoforms *= (i+1)
+
+	return isoforms	
 
 
 def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff):
@@ -200,6 +218,7 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff):
 	elif(mode == 'overlaps'):
 		print("===== GENE " + gene.id + " ===== ")
 		isoforms = _isoforms_overlaps(gene, rna_introns, freq, dist_thr, fold_thr, file, mode, gff)
+		print("number of isoforms: " + str(isoforms))
 	else:
 		raise Exception('invalid isoform mode.')
 	return isoforms
