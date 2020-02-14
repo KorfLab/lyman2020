@@ -35,6 +35,8 @@ parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
 parser.add_argument('--isomax', required=True, type=int,
 	metavar='<path>', help='qualified region list output filename')
+parser.add_argument('--target', required=False, type=str,
+	metavar='<str>', help='run only on a specified region')
 
 arg = parser.parse_args()
 
@@ -234,6 +236,7 @@ o = open(arg.out, 'w+')
 o.write('region\tgid\tlen\ttxs\texons\trna_introns\texp\tiso4\tiso6\tiso8\tlkd1\tlkd2\n')
 
 for region in os.listdir(arg.regions):
+	if(arg.target) and region != arg.target: continue
 
 	prefix = arg.regions + '/' + region + '/' + region
 
