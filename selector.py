@@ -111,7 +111,7 @@ def write_isoforms(chunks, file):
 			file.write(str(f.beg) + "," + str(f.end) + ' ')
 		file.write('\n')
 
-def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
+def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
@@ -120,7 +120,6 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 	
 	chunks = [] #groups of overlapping introns
 	used = []
-	ignore = []
 	for i in range(len(vis_introns)):
 		chunks.append([])
 		curr = copy.copy(vis_introns[i])
@@ -129,13 +128,14 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 
 		for j in range(0, len(vis_introns)):
 			check = vis_introns[j]
-			if(curr.overlap(check) and check not in ignore and check not in used):
+			if(curr.overlap(check) and check not in used):
 				for ch in chunks: # not sure about this
 					for intr in ch:
 						if(intr.overlap(check)):
-							ignore.append(check)
+							used.append(check)
 							continue
 				chunks[i].append(check)
+				used.append(check)
 
 	chunks = [ch for ch in chunks if len(ch) > 0]
 	chunks.sort(key = lambda x: x[0].beg) # sort all chunks by position
@@ -148,7 +148,7 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file):
 	if(isoforms < arg.isomax):
 		write_isoforms(chunks, file)
 	else:
-		print('skipping ' + str(gene.id))
+		print('skipping ' + str(region))
 	return isoforms	
 
 
@@ -224,11 +224,11 @@ for region in os.listdir(arg.regions):
 			iso = open(prefix + '.isoforms', 'w+')
 			iso.write('region: {} gid: {}\n'.format(region, gene.id))
 			iso.write('\n1e-4 freq paths:\n')
-			iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso)
+			iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso, region)
 			iso.write('\n1e-6 freq paths:\n')
-			iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso)
+			iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso, region)
 			iso.write('\n1e-8 freq paths:\n')
-			iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso)
+			iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso, region)
 
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
