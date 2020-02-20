@@ -223,11 +223,11 @@ for region in os.listdir(arg.regions):
 			d1, d2 = distance(region, gff, gene)
 			iso = open(prefix + '.isoforms', 'w+')
 			iso.write('region: {} gid: {}\n'.format(region, gene.id))
-			iso.write('\n1e-4 freq paths:\n')
+			iso.write('1e-4 freq paths:\n')
 			iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso, region)
-			iso.write('\n1e-6 freq paths:\n')
+			iso.write('1e-6 freq paths:\n')
 			iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso, region)
-			iso.write('\n1e-8 freq paths:\n')
+			iso.write('1e-8 freq paths:\n')
 			iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso, region)
 
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
