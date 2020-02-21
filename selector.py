@@ -105,11 +105,21 @@ def distance(region, gff, gene):
 def fold(a, b):
 	return a/b if a > b else b/a
 
-def write_isoforms(chunks, file):
-	for iso in itertools.product(*chunks):
-		for f in iso:
-			file.write(str(f.beg) + "," + str(f.end) + ' ')
-		file.write('\n')
+def write_isoforms(chunks, begs, ends, file):
+	for i in range(len(chunks)):
+		for intr in chunks[i]:
+			if(intr.beg in begs):
+				rest = [chunks[j] for j in range(i+1, len(chunks))]
+				args = [[intr]]
+				args.extend(rest)
+				for form in itertools.product(*args):	
+					if(form[len(form)-1].end not in ends):
+						continue
+					s = ''
+					for f in form:
+						s += str(f.beg) + "," + str(f.end) + ' '
+					s = s[:-1]	
+					file.write(s + '\n')
 
 def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 	vis_introns = []
@@ -117,7 +127,19 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
 	vis_introns.sort(key = operator.attrgetter('score'), reverse=True) # sort by most expressed
-	
+
+	begs = set()
+	ends = set()
+	for tx in gene.transcripts():
+		first = tx.exons[0]
+		last = tx.exons[len(tx.exons)-1]
+		begs.add(first.end + 1)	
+		ends.add(last.beg  - 1)
+		
+
+	begs = sorted(list(begs))
+	ends = sorted(list(ends))
+
 	chunks = [] #groups of overlapping introns
 	used = []
 	for i in range(len(vis_introns)):
@@ -137,16 +159,16 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 				chunks[i].append(check)
 				used.append(check)
 
-	chunks = [ch for ch in chunks if len(ch) > 0]
+	chunks = [sorted(ch, key = operator.attrgetter('beg')) for ch in chunks if len(ch) > 0]
 	chunks.sort(key = lambda x: x[0].beg) # sort all chunks by position
-		
+	
 
 	isoforms = 1 # estimate isoform count by multiplying number of introns in each overlapping chunk
 	for ch in chunks:
 		isoforms *= len(ch) if len(ch) > 1 else 1
 
 	if(isoforms < arg.isomax):
-		write_isoforms(chunks, file)
+		write_isoforms(chunks, begs, ends, file)
 	else:
 		print('skipping ' + str(region))
 	return isoforms	
