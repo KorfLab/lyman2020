@@ -33,7 +33,11 @@ parser.add_argument('--report', required=True, type=str,
 parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
 parser.add_argument('--isomax', required=True, type=int,
-	metavar='<path>', help='qualified region list output filename')
+	metavar='<num>', help='maximum number of predicted isoforms')
+parser.add_argument('--write', '-w', action='store_true', required=False,
+	help='if present, will write to .isoform files')
+parser.add_argument('--count', '-c', action='store_true', required=False,
+	help='if present, will print count of predicted isoforms')
 parser.add_argument('--target', required=False, type=str,
 	metavar='<str>', help='run only on a specified region')
 
@@ -135,7 +139,6 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 		last = tx.exons[len(tx.exons)-1]
 		begs.add(first.end + 1)	
 		ends.add(last.beg  - 1)
-		
 
 	begs = sorted(list(begs))
 	ends = sorted(list(ends))
@@ -143,20 +146,25 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 	chunks = [] #groups of overlapping introns
 	used = []
 	for i in range(len(vis_introns)):
-		chunks.append([])
 		curr = copy.copy(vis_introns[i])
+		chunks.append([])
+		if(vis_introns[i] in used): continue
 		curr.beg = curr.beg - dist_thr # consider introns within a threshold part of the chunk
 		curr.end = curr.end + dist_thr
 
 		for j in range(0, len(vis_introns)):
 			check = vis_introns[j]
 			if(curr.overlap(check) and check not in used):
-				for ch in chunks: # not sure about this
+				good = True
+				for ch in (chunks[:i] + chunks[(i+1):]): # not sure about this
 					for intr in ch:
 						if(intr.overlap(check)):
 							used.append(check)
-							continue
-				chunks[i].append(check)
+							good = False		
+							break
+					if not good: break
+				if good:
+					chunks[i].append(check)
 				used.append(check)
 
 	chunks = [sorted(ch, key = operator.attrgetter('beg')) for ch in chunks if len(ch) > 0]
@@ -167,10 +175,11 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 	for ch in chunks:
 		isoforms *= len(ch) if len(ch) > 1 else 1
 
-	if(isoforms < arg.isomax):
-		write_isoforms(chunks, begs, ends, file)
-	else:
-		print('skipping ' + str(region))
+	if(arg.write):
+		if(isoforms < arg.isomax):
+			write_isoforms(chunks, begs, ends, file)
+		else:
+			print('skipping ' + str(region) + ' level ' + str(freq))
 	return isoforms	
 
 
@@ -207,6 +216,7 @@ for region in os.listdir(arg.regions):
 	# memorize RNA-supported intron coordinates and count RNA-supported introns
 	gff = GFF_file(file=prefix + '.gff', source=arg.source)
 	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
+
 	for chrom in genome:
 		rna_count = 0
 		rna_mass = 0
@@ -244,13 +254,20 @@ for region in os.listdir(arg.regions):
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
 			iso = open(prefix + '.isoforms', 'w+')
-			iso.write('region: {} gid: {}\n'.format(region, gene.id))
-			iso.write('1e-4 freq paths:\n')
+			if(arg.write):
+				iso.write('region: {} gid: {}\n'.format(region, gene.id))
+				iso.write('1e-4 freq paths:\n')
 			iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso, region)
-			iso.write('1e-6 freq paths:\n')
+			if(arg.write): iso.write('1e-6 freq paths:\n')
 			iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso, region)
-			iso.write('1e-8 freq paths:\n')
+			if(arg.write): iso.write('1e-8 freq paths:\n')
 			iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso, region)
+			if(arg.write): iso.close()
+			if(arg.count):
+				print('region: {} gid: {}'.format(region, gene.id))
+				print('isoform count 1e-4: ' + str(iso4))
+				print('isoform count 1e-6: ' + str(iso6))
+				print('isoform count 1e-8: ' + str(iso8))
 
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
