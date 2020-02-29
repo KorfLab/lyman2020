@@ -8,6 +8,7 @@ import copy
 import json
 import math
 import itertools
+import numpy as np
 
 from grimoire.io import GFF_file
 from grimoire.sequence import DNA
@@ -32,12 +33,12 @@ parser.add_argument('--report', required=True, type=str,
 	metavar='<path>', help='report output filename')
 parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
-parser.add_argument('--isomax', required=True, type=int,
-	metavar='<num>', help='maximum number of predicted isoforms')
 parser.add_argument('--write', '-w', action='store_true', required=False,
 	help='if present, will write to .isoform files')
-parser.add_argument('--count', '-c', action='store_true', required=False,
-	help='if present, will print count of predicted isoforms')
+parser.add_argument('--nruns', required=True,
+	help='The number of times to generate paths per gene ("sample size")')
+parser.add_argument('--nreport', required=True,
+	help='The number of isoforms to report (the n most encountered in simulation)')
 parser.add_argument('--target', required=False, type=str,
 	metavar='<str>', help='run only on a specified region')
 
@@ -125,13 +126,13 @@ def write_isoforms(chunks, begs, ends, file):
 					s = s[:-1]	
 					file.write(s + '\n')
 
-def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
+def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, region):
+#	print(region)
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
-	vis_introns.sort(key = operator.attrgetter('score'), reverse=True) # sort by most expressed
-
+	vis_introns.sort(key = operator.attrgetter('beg'), reverse=False) # sort by most expressed
 	begs = set()
 	ends = set()
 	for tx in gene.transcripts():
@@ -143,45 +144,72 @@ def isoforms(gene, rna_introns, freq, dist_thr, fold_thr, file, region):
 	begs = sorted(list(begs))
 	ends = sorted(list(ends))
 
-	chunks = [] #groups of overlapping introns
-	used = []
-	for i in range(len(vis_introns)):
-		curr = copy.copy(vis_introns[i])
-		chunks.append([])
-		if(vis_introns[i] in used): continue
-		curr.beg = curr.beg - dist_thr # consider introns within a threshold part of the chunk
-		curr.end = curr.end + dist_thr
+	paths = {}
+#	print("vis")
+#	for v in vis_introns: print(str(v.beg) + ',' + str(v.end))
+	for _ in range(n_gen):
+		path = []
+		intrs = vis_introns.copy()
+		curr = intrs[0]
+	#	print("begin")
+	#	print(str(curr.beg) + ',' + str(curr.end))
+		while True:
+			poss = []
+	#		print("possible")
+			for j in range(0, len(intrs)):
+				if curr.overlap(intrs[j]):
+					poss.append(intrs[j])	 
+			
+			tot_score = sum([x.score for x in poss])
+	#		for x in poss:
+	#			print(str(x.beg) + ',' + str(x.end))
+	#			print(str(x.score / tot_score))
 
-		for j in range(0, len(vis_introns)):
-			check = vis_introns[j]
-			if(curr.overlap(check) and check not in used):
-				good = True
-				for ch in (chunks[:i] + chunks[(i+1):]): # not sure about this
-					for intr in ch:
-						if(intr.overlap(check)):
-							used.append(check)
-							good = False		
-							break
-					if not good: break
-				if good:
-					chunks[i].append(check)
-				used.append(check)
+			dist = [x.score / tot_score for x in poss]
+			choice = np.random.choice(poss, size=1, p=dist)[0] # pick a next intron weighted by expression
+	#		print("chose")
+	#		print(str(choice.beg) + ',' + str(choice.end))
 
-	chunks = [sorted(ch, key = operator.attrgetter('beg')) for ch in chunks if len(ch) > 0]
-	chunks.sort(key = lambda x: x[0].beg) # sort all chunks by position
-	
+	#		print("after remove")
+			for p in poss:
+				if(p.beg <= choice.end + dist_thr):
+					intrs.remove(p)
 
-	isoforms = 1 # estimate isoform count by multiplying number of introns in each overlapping chunk
-	for ch in chunks:
-		isoforms *= len(ch) if len(ch) > 1 else 1
+	#		for intr in intrs:
+	#			print(str(intr.beg) + ',' + str(intr.end))
+			
+			next_intr = None
+			for intr in intrs:
+				if(intr.beg >= choice.end + dist_thr):
+					next_intr = intr
+					break
+			if next_intr is None:
+				break
+			
+	#		print("next intr is")
+	#		print(str(next_intr.beg) + ',' + str(next_intr.end))
+			curr = next_intr
+			path.append(choice)
 
-	if(arg.write):
-		if(isoforms < arg.isomax):
-			write_isoforms(chunks, begs, ends, file)
-		else:
-			print('skipping ' + str(region) + ' level ' + str(freq))
+		rep = encode_iso(path)
+		paths.setdefault(rep, 0)
+		paths[rep] += 1
+	sort = sorted(paths, key=paths.get, reverse=True)
+	tot = sum(paths.values())
+	print(str(n_rep) + ' best paths for ' + region)
+	for i in range(n_rep):
+		if i >= len(sort):
+			break
+		print(sort[i] + ' ' + str(paths[sort[i]]/tot))
+			
 	return isoforms	
 
+def encode_iso(intrs):
+	rep = '' #string representation of the path
+	for intr in intrs:
+		rep += str(intr.beg) + ',' + str(intr.end) + ' '
+
+	return rep
 
 coding = 0
 isolated = 0
@@ -217,6 +245,11 @@ for region in os.listdir(arg.regions):
 	gff = GFF_file(file=prefix + '.gff', source=arg.source)
 	genome = Reader(gff=prefix + '.gff', fasta=prefix + '.fa', source=arg.source)
 
+	dist_thr = 30 # minimum distance between introns to be valid
+	fold_thr = 5  # introns must be within k-fold of the mean expression level
+	nruns = int(arg.nruns)
+	nreport = int(arg.nreport)
+
 	for chrom in genome:
 		rna_count = 0
 		rna_mass = 0
@@ -224,8 +257,6 @@ for region in os.listdir(arg.regions):
 		tx_len = 0
 		ex_count = 0
 		gene = chrom.ftable.build_genes()[0]
-		dist_thr = 30 # minimum distance between introns to be valid
-		fold_thr = 5  # introns must be within k-fold of the mean expression level
 		rna_introns = []
 		intron_support = {}
 		for intron in chrom.ftable.features:
@@ -257,17 +288,12 @@ for region in os.listdir(arg.regions):
 			if(arg.write):
 				iso.write('region: {} gid: {}\n'.format(region, gene.id))
 				iso.write('1e-4 freq paths:\n')
-			iso4 = isoforms(gene, rna_introns, 1e-4, dist_thr, fold_thr, iso, region)
+			iso4 = isoforms(gene, rna_introns, 1e-4, nruns, nreport, dist_thr, fold_thr, iso, region)
 			if(arg.write): iso.write('1e-6 freq paths:\n')
-			iso6 = isoforms(gene, rna_introns, 1e-6, dist_thr, fold_thr, iso, region)
+			iso6 = isoforms(gene, rna_introns, 1e-6, nruns, nreport, dist_thr, fold_thr, iso, region)
 			if(arg.write): iso.write('1e-8 freq paths:\n')
-			iso8 = isoforms(gene, rna_introns, 1e-8, dist_thr, fold_thr, iso, region)
+			iso8 = isoforms(gene, rna_introns, 1e-8, nruns, nreport, dist_thr, fold_thr, iso, region)
 			if(arg.write): iso.close()
-			if(arg.count):
-				print('region: {} gid: {}'.format(region, gene.id))
-				print('isoform count 1e-4: ' + str(iso4))
-				print('isoform count 1e-6: ' + str(iso6))
-				print('isoform count 1e-8: ' + str(iso8))
 
 			o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 				tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
