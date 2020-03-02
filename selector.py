@@ -127,12 +127,12 @@ def write_isoforms(chunks, begs, ends, file):
 					file.write(s + '\n')
 
 def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, region):
-#	print(region)
+	#print(region)
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
-	vis_introns.sort(key = operator.attrgetter('beg'), reverse=False) # sort by most expressed
+	vis_introns.sort(key = operator.attrgetter('score'), reverse=True) # sort by most expressed
 	begs = set()
 	ends = set()
 	for tx in gene.transcripts():
@@ -145,51 +145,47 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 	ends = sorted(list(ends))
 
 	paths = {}
-#	print("vis")
-#	for v in vis_introns: print(str(v.beg) + ',' + str(v.end))
+	#print("vis")
+	#for v in vis_introns: print(str(v.beg) + ',' + str(v.end))
 	for _ in range(n_gen):
 		path = []
 		intrs = vis_introns.copy()
-		curr = intrs[0]
-	#	print("begin")
-	#	print(str(curr.beg) + ',' + str(curr.end))
+		used = []
+		ct = 0
+		#print("begin")
+		#print(str(curr.beg) + ',' + str(curr.end))
 		while True:
+			if ct == len(intrs): break
+			curr = intrs[ct]
 			poss = []
-	#		print("possible")
+			#print("possible")
 			for j in range(0, len(intrs)):
-				if curr.overlap(intrs[j]):
+				if curr.overlap(intrs[j]) and intrs[j] not in used:
 					poss.append(intrs[j])	 
 			
+			if len(poss) == 0: break
+
 			tot_score = sum([x.score for x in poss])
-	#		for x in poss:
-	#			print(str(x.beg) + ',' + str(x.end))
-	#			print(str(x.score / tot_score))
+		#	for x in poss:
+				#print(str(x.beg) + ',' + str(x.end))
+				#print(str(x.score / tot_score))
 
 			dist = [x.score / tot_score for x in poss]
 			choice = np.random.choice(poss, size=1, p=dist)[0] # pick a next intron weighted by expression
-	#		print("chose")
-	#		print(str(choice.beg) + ',' + str(choice.end))
+			#print("chose")
+			#print(str(choice.beg) + ',' + str(choice.end))
 
-	#		print("after remove")
-			for p in poss:
-				if(p.beg <= choice.end + dist_thr):
-					intrs.remove(p)
-
-	#		for intr in intrs:
-	#			print(str(intr.beg) + ',' + str(intr.end))
-			
-			next_intr = None
-			for intr in intrs:
-				if(intr.beg >= choice.end + dist_thr):
-					next_intr = intr
-					break
-			if next_intr is None:
-				break
-			
-	#		print("next intr is")
-	#		print(str(next_intr.beg) + ',' + str(next_intr.end))
-			curr = next_intr
 			path.append(choice)
+			#print("after remove")
+			for p in poss:
+				if(p.beg <= choice.end + dist_thr and p.end >= choice.beg - dist_thr and p not in used):
+					used.append(p)	
+					#intrs.remove(p)
+
+			#for intr in intrs:
+				#print(str(intr.beg) + ',' + str(intr.end))
+			
+			ct += 1
 
 		rep = encode_iso(path)
 		paths.setdefault(rep, 0)
