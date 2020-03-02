@@ -127,14 +127,15 @@ def write_isoforms(chunks, begs, ends, file):
 					file.write(s + '\n')
 
 def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, region):
-	#print(region)
 	vis_introns = []
 	for f in rna_introns:
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
+
 	vis_introns.sort(key = operator.attrgetter('score'), reverse=True) # sort by most expressed
 	begs = set()
 	ends = set()
+
 	for tx in gene.transcripts():
 		first = tx.exons[0]
 		last = tx.exons[len(tx.exons)-1]
@@ -145,54 +146,38 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 	ends = sorted(list(ends))
 
 	paths = {}
-	#print("vis")
-	#for v in vis_introns: print(str(v.beg) + ',' + str(v.end))
-	for _ in range(n_gen):
+	for _ in range(n_gen): # generate n_gen isoforms
 		path = []
-		intrs = vis_introns.copy()
 		used = []
 		ct = 0
-		#print("begin")
-		#print(str(curr.beg) + ',' + str(curr.end))
-		while True:
-			if ct == len(intrs): break
-			curr = intrs[ct]
-			poss = []
-			#print("possible")
-			for j in range(0, len(intrs)):
-				if curr.overlap(intrs[j]) and intrs[j] not in used:
-					poss.append(intrs[j])	 
+		while ct < len(vis_introns):
+			curr = vis_introns[ct]
+			poss = [] # choices for the next intron
+
+			for j in range(0, len(vis_introns)):
+				if curr.overlap(vis_introns[j]) and vis_introns[j] not in used:
+					poss.append(vis_introns[j])	 
 			
 			if len(poss) == 0: break
 
 			tot_score = sum([x.score for x in poss])
-		#	for x in poss:
-				#print(str(x.beg) + ',' + str(x.end))
-				#print(str(x.score / tot_score))
-
 			dist = [x.score / tot_score for x in poss]
 			choice = np.random.choice(poss, size=1, p=dist)[0] # pick a next intron weighted by expression
-			#print("chose")
-			#print(str(choice.beg) + ',' + str(choice.end))
 
 			path.append(choice)
-			#print("after remove")
 			for p in poss:
 				if(p.beg <= choice.end + dist_thr and p.end >= choice.beg - dist_thr and p not in used):
 					used.append(p)	
-					#intrs.remove(p)
-
-			#for intr in intrs:
-				#print(str(intr.beg) + ',' + str(intr.end))
-			
 			ct += 1
 
+		path.sort(key = operator.attrgetter('beg')) # re-sort by coordinate
 		rep = encode_iso(path)
-		paths.setdefault(rep, 0)
+		paths.setdefault(rep, 0) # count the times we have seen this form
 		paths[rep] += 1
+
 	sort = sorted(paths, key=paths.get, reverse=True)
 	tot = sum(paths.values())
-	print('threshold: ' + str(freq) + ': ' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
+	print('\nthreshold: ' + str(freq) + ': ' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
 	for i in range(n_rep):
 		if i >= len(sort):
 			break
