@@ -192,7 +192,7 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		paths[rep] += 1
 	sort = sorted(paths, key=paths.get, reverse=True)
 	tot = sum(paths.values())
-	print(str(n_rep) + ' best paths for ' + region)
+	print('threshold: ' + str(freq) + ': ' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
 	for i in range(n_rep):
 		if i >= len(sort):
 			break
