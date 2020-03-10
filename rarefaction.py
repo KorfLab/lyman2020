@@ -48,25 +48,19 @@ def mass_ramp(source):
 	cramp.append(pramp[0])
 	for i in range(1, len(pramp)):
 		cramp.append(cramp[i - 1] + pramp[i])
-	return cramp
-
-anno_ramp = mass_ramp(wormbase)
-splice_ramp = mass_ramp(splice)
-
-def observations(ramp):
 	obs = set()
 	for i in range(arg.coverage):
 		p = random.random()
-		for j in range(len(ramp)):
-			if p <= ramp[j]:
+		for j in range(len(cramp)):
+			if p <= cramp[j]:
 				obs.add(j)
 				break
-	return(obs)
+	return(len(obs))
 	
-anno_obs = observations(anno_ramp)
-splice_obs = observations(splice_ramp)
-print('observed WormBase introns', len(anno_obs))
-print('observed RNASeq_splice introns', len(splice_obs))
+anno_obs = mass_ramp(wormbase)
+splice_obs = mass_ramp(splice)
+print('observed WormBase introns', anno_obs)
+print('observed RNASeq_splice introns', splice_obs)
 
 """
 for s in source:
