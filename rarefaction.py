@@ -16,10 +16,13 @@ parser.add_argument('--gff3', required=True, type=str,
 	metavar='<path>', help='gff file, may be compressed')
 parser.add_argument('--source', required=True, type=str,
 	metavar='<str>', help='rule-based parsing based on gff source')
-parser.add_argument('--coverage', required=False, type=int, default = 10000,
+parser.add_argument('--maxcov', required=False, type=int, default = 10000,
 	metavar='<int>', help='number of simulated reads [10000]')
+parser.add_argument('--step', required=False, type=int, default = 100,
+	metavar='<int>', help='coverage range increment [100]')	
 arg = parser.parse_args()
 
+# memorize coordinates of introns
 gff = GFF_stream(arg.gff3)
 wormbase = {}
 splice = {}
@@ -33,9 +36,17 @@ for f in gff:
 	elif f.source == 'RNASeq_splice':
 		splice[stringy] = f.score
 
-print('WormBase introns', len(wormbase))
-print('RNASeq_splice introns', len(splice))
+print('TOTAL INTRONS: WormBase={} RNASeq_splice={}'.format(len(wormbase), len(splice)))
 
+def observations(ramp, cov):
+	obs = set()
+	for i in range(cov):
+		p = random.random()
+		for j in range(len(ramp)):
+			if p <= ramp[j]:
+				obs.add(j)
+				break
+	return(len(obs))
 
 def mass_ramp(source):
 	mass = 0
@@ -48,19 +59,19 @@ def mass_ramp(source):
 	cramp.append(pramp[0])
 	for i in range(1, len(pramp)):
 		cramp.append(cramp[i - 1] + pramp[i])
-	obs = set()
-	for i in range(arg.coverage):
-		p = random.random()
-		for j in range(len(cramp)):
-			if p <= cramp[j]:
-				obs.add(j)
-				break
-	return(len(obs))
+	obs = []
+	for i in range(0, arg.maxcov, arg.step):
+		obs.append(observations(cramp, i))
+	return(obs)	
+
+
 	
 anno_obs = mass_ramp(wormbase)
 splice_obs = mass_ramp(splice)
-print('observed WormBase introns', anno_obs)
-print('observed RNASeq_splice introns', splice_obs)
+
+print('cov\tWormBase\tRNASeq_splice')
+for i in range(len(anno_obs)):
+	print('{}\t{}\t{}'.format(i, anno_obs[i], splice_obs[i]))
 
 """
 for s in source:
