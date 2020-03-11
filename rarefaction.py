@@ -71,7 +71,7 @@ splice_obs = mass_ramp(splice)
 
 print('cov\tWormBase\tRNASeq_splice')
 for i in range(len(anno_obs)):
-	print('{}\t{}\t{}'.format(i, anno_obs[i], splice_obs[i]))
+	print('{}\t{}\t{}'.format(i * arg.step, anno_obs[i], splice_obs[i]))
 
 """
 for s in source:
