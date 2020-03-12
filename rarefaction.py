@@ -36,8 +36,6 @@ for f in gff:
 	elif f.source == 'RNASeq_splice':
 		splice[stringy] = f.score
 
-print('TOTAL INTRONS: WormBase={} RNASeq_splice={}'.format(len(wormbase), len(splice)))
-
 def observations(ramp, cov):
 	obs = set()
 	for i in range(cov):
@@ -72,6 +70,8 @@ splice_obs = mass_ramp(splice)
 print('cov\tWormBase\tRNASeq_splice')
 for i in range(len(anno_obs)):
 	print('{}\t{}\t{}'.format(i * arg.step, anno_obs[i], splice_obs[i]))
+print('gff\t{}\t{}'.format(len(wormbase), len(splice)))
+
 
 """
 for s in source:
