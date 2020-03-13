@@ -153,7 +153,6 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 	for j in range(0, len(vis_introns)):
 		if max_intr.overlap(vis_introns[j]):
 			expr_max += vis_introns[j].score
-			if(max_intr == vis_introns[j]): continue
 			maxgroup.append(vis_introns[j])	 
 			
 	paths = {}
@@ -161,6 +160,7 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		path = []
 		used = []
 		used.extend(maxgroup)
+		path.append(max_intr)
 
 		for i in range(len(vis_introns)):
 			if(vis_introns[i] in used): continue
@@ -177,6 +177,7 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		paths.setdefault(rep, 0) # count the times we have seen this form
 		paths[rep] += 1
 
+	path.sort(key=operator.attrgetter('beg'))
 	sort = sorted(paths, key=paths.get, reverse=True)
 	tot = sum(paths.values())
 	print('\n' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
