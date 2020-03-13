@@ -173,11 +173,11 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 				if(vis_introns[i].overlap(vis_introns[j])):
 					used.append(vis_introns[j])
 			
+		path.sort(key=operator.attrgetter('beg'))
 		rep = encode_iso(path)
 		paths.setdefault(rep, 0) # count the times we have seen this form
 		paths[rep] += 1
 
-	path.sort(key=operator.attrgetter('beg'))
 	sort = sorted(paths, key=paths.get, reverse=True)
 	tot = sum(paths.values())
 	print('\n' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
