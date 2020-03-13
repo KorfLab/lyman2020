@@ -133,6 +133,7 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 			vis_introns.append(f)
 
 	max_intr = max(vis_introns, key=operator.attrgetter('score'))
+
 	vis_introns.sort(key = operator.attrgetter('beg')) # sort by most expressed
 
 	begs = set()
@@ -160,7 +161,9 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		path = []
 		used = []
 		used.extend(maxgroup)
-		path.append(max_intr)
+		prob = max_intr.score / expr_max
+		if(np.random.choice([True, False], size=1, p=[prob, 1-prob])):
+			path.append(max_intr)
 
 		for i in range(len(vis_introns)):
 			if(vis_introns[i] in used): continue
