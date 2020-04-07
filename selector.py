@@ -35,6 +35,8 @@ parser.add_argument('--out', required=True, type=str,
 	metavar='<path>', help='qualified region list output filename')
 parser.add_argument('--write', '-w', action='store_true', required=False,
 	help='if present, will write to .isoform files')
+parser.add_argument('--verbose', '-v', action='store_true', required=False,
+	help='if present, will print results to stdout')
 parser.add_argument('--nruns', required=True,
 	help='The number of times to generate paths per gene ("sample size")')
 parser.add_argument('--nreport', required=True,
@@ -110,22 +112,6 @@ def distance(region, gff, gene):
 def fold(a, b):
 	return a/b if a > b else b/a
 
-def write_isoforms(chunks, begs, ends, file):
-	for i in range(len(chunks)):
-		for intr in chunks[i]:
-			if(intr.beg in begs):
-				rest = [chunks[j] for j in range(i+1, len(chunks))]
-				args = [[intr]]
-				args.extend(rest)
-				for form in itertools.product(*args):	
-					if(form[len(form)-1].end not in ends):
-						continue
-					s = ''
-					for f in form:
-						s += str(f.beg) + "," + str(f.end) + ' '
-					s = s[:-1]	
-					file.write(s + '\n')
-
 def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, region):
 	vis_introns = []
 	for f in rna_introns:
@@ -183,13 +169,12 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 
 	sort = sorted(paths, key=paths.get, reverse=True)
 	tot = sum(paths.values())
-	print('\n' + str(n_rep) + ' best paths for ' + region + ' (' + gene.id + ')')
-	for i in range(n_rep):
-		if i >= len(sort):
-			break
-		print((sort[i] if len(sort[i].strip()) > 0 else '[none]') + ' ' + str(paths[sort[i]]/tot))
-			
-	return isoforms	
+	if(arg.verbose): print('\nregion '  + region + ' (' + gene.id + ')')
+	for i in range(min(n_rep, len(sort))):
+		if(arg.write):
+			isofile.write(str(paths[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none] ') + '\n')
+		if(arg.verbose):
+			print(str(paths[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none]'))
 
 def encode_iso(intrs):
 	rep = '' #string representation of the path
@@ -270,8 +255,8 @@ for region in os.listdir(arg.regions):
 			tx_count = len(gene.transcripts())
 			# check how well annotation matches introns using new methods
 			d1, d2 = distance(region, gff, gene)
-
-			iso = isoforms(gene, rna_introns, 1e-8, nruns, nreport, dist_thr, fold_thr, None, region)
+			isofile = open(prefix + '.isoforms', 'w+')
+			isoforms(gene, rna_introns, 1e-8, nruns, nreport, dist_thr, fold_thr, isofile, region)
 
 			#o.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(region, gene.id, glen,
 			#	tx_count, ex_count, rna_count, rna_mass, iso4, iso6, iso8, d1, d2))
