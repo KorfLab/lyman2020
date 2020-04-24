@@ -120,7 +120,7 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 
 	max_intr = max(vis_introns, key=operator.attrgetter('score'))
 
-	vis_introns.sort(key = operator.attrgetter('beg')) # sort by most expressed
+	# vis_introns.sort(key = operator.attrgetter('beg')) # sort by most expressed
 
 	begs = set()
 	ends = set()
@@ -136,6 +136,8 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 
 	maxgroup = [] # introns overlapping the most expressed
 
+	expr_tot = sum([x.score for x in vis_introns])
+
 	expr_max = 0
 	for j in range(0, len(vis_introns)):
 		if max_intr.overlap(vis_introns[j]):
@@ -147,20 +149,26 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		path = []
 		used = []
 		used.extend(maxgroup)
-		prob = max_intr.score / expr_max
-		if(np.random.choice([True, False], size=1, p=[prob, 1-prob])):
-			path.append(max_intr)
+		used.remove(max_intr)
 
-		for i in range(len(vis_introns)):
-			if(vis_introns[i] in used): continue
-			prob = vis_introns[i].score / expr_max
-			if(np.random.choice([True, False], size=1, p=[prob, 1-prob])):
-				path.append(vis_introns[i])
+		while len(vis_introns) != len(used):
+			unused = [x for x in vis_introns if x not in used]
+			expr_tot = sum([x.score for x in unused])
+
+			# pick a 'candidate' based on relative expression
+			pdist = [x.score/expr_tot for x in unused]
+			next_intr = np.random.choice(unused,
+				p=pdist)
+
+			# decide to include that candidate or not
+			prob = next_intr.score / expr_max
+			if(np.random.choice([True, False], p=[prob, 1-prob])):
+				path.append(next_intr)
 
 			overlap = []
-			for j in range(len(vis_introns)):
-				if(vis_introns[i].overlap(vis_introns[j])):
-					used.append(vis_introns[j])
+			for j in range(len(unused)):
+				if(next_intr.overlap(unused[j])):
+					used.append(unused[j])
 			
 		path.sort(key=operator.attrgetter('beg'))
 		rep = encode_iso(path)
