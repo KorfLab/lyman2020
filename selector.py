@@ -118,76 +118,66 @@ def isoforms(gene, rna_introns, freq, n_gen, n_rep, dist_thr, fold_thr, file, re
 		if f.score > freq and f.strand == gene.strand:
 			vis_introns.append(f)
 
-	max_intr = max(vis_introns, key=operator.attrgetter('score'))
 
-	# vis_introns.sort(key = operator.attrgetter('beg')) # sort by most expressed
+	begs = {} # sum the transcript mass with endpoints at each splice site
+	ends = {}
+	for v in vis_introns:
+		begs[v.beg] = begs[v.beg] + v.score if v.beg in begs else v.score
+		ends[v.end] = ends[v.end] + v.score if v.end in ends else v.score
+	
+	sites = list(begs.items())
+	sites.extend(ends.items())
+	max_site = max(sites, key=operator.itemgetter(1)) # tuple: (site coordinate, score)
+	max_score = max_site[1]
 
-	begs = set()
-	ends = set()
+	print(begs)
+	print(ends)
 
-	for tx in gene.transcripts():
-		first = tx.exons[0]
-		last = tx.exons[len(tx.exons)-1]
-		begs.add(first.end + 1)	
-		ends.add(last.beg  - 1)
-
-	begs = sorted(list(begs))
-	ends = sorted(list(ends))
-
-	maxgroup = [] # introns overlapping the most expressed
-
-	expr_tot = sum([x.score for x in vis_introns])
-
-	expr_max = 0
-	for j in range(0, len(vis_introns)):
-		if max_intr.overlap(vis_introns[j]):
-			expr_max += vis_introns[j].score
-			maxgroup.append(vis_introns[j])	 
-			
-	paths = {}
+	isoforms = {}
 	for _ in range(n_gen): # generate n_gen isoforms
-		path = []
-		used = []
-		used.extend(maxgroup)
-		used.remove(max_intr)
-
-		while len(vis_introns) != len(used):
-			unused = [x for x in vis_introns if x not in used]
-			expr_tot = sum([x.score for x in unused])
-
-			# pick a 'candidate' based on relative expression
-			pdist = [x.score/expr_tot for x in unused]
-			next_intr = np.random.choice(unused,
-				p=pdist)
-
-			# decide to include that candidate or not
-			prob = next_intr.score / expr_max
+		
+		begs_on = [] # the active splice sites
+		for coord, score in begs.items():
+			prob = score / max_score
 			if(np.random.choice([True, False], p=[prob, 1-prob])):
-				path.append(next_intr)
+				begs_on.append(coord) # turn this site on
 
-			overlap = []
-			for j in range(len(unused)):
-				if(next_intr.overlap(unused[j])):
-					used.append(unused[j])
-			
-		path.sort(key=operator.attrgetter('beg'))
-		rep = encode_iso(path)
-		paths.setdefault(rep, 0) # count the times we have seen this form
-		paths[rep] += 1
+		ends_on = []
+		for coord, score in ends.items():
+			prob = score / max_score
+			if(np.random.choice([True, False], p=[prob, 1-prob])):
+				ends_on.append(coord)
 
-	sort = sorted(paths, key=paths.get, reverse=True)
-	tot = sum(paths.values())
+		used = [0]
+		isoform = []
+
+		for beg in begs_on:
+			if(beg <= used[-1]): continue
+			if len(used) - 1 == len(ends_on):
+				break
+			end = [x for x in ends_on if x not in used and x >= beg][0]
+			used.append(end)
+			isoform.append((beg, end))
+
+
+	#	isoform.sort(key=operator.attrgetter('beg'))
+		rep = encode_iso(isoform)
+		isoforms.setdefault(rep, 0) # count the times we have seen this form
+		isoforms[rep] += 1
+
+	sort = sorted(isoforms, key=isoforms.get, reverse=True)
+	tot = sum(isoforms.values())
 	if(arg.verbose): print('\nregion '  + region + ' (' + gene.id + ')')
 	for i in range(min(n_rep, len(sort))):
 		if(arg.write):
-			isofile.write(str(paths[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none] ') + '\n')
+			isofile.write(str(isoforms[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none] ') + '\n')
 		if(arg.verbose):
-			print(str(paths[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none]'))
+			print(str(isoforms[sort[i]]/tot) +'\t'+(sort[i] if len(sort[i].strip()) > 0 else '[none]'))
 
 def encode_iso(intrs):
 	rep = '' #string representation of the path
 	for intr in intrs:
-		rep += str(intr.beg) + ',' + str(intr.end) + ' '
+		rep += str(intr[0]) + ',' + str(intr[1]) + ' '
 
 	return rep
 
@@ -246,8 +236,6 @@ for region in os.listdir(arg.regions):
 				if intron.beg not in intron_support:
 					intron_support[intron.beg] = {}
 					intron_support[intron.beg][intron.end] = True
-		for intron in rna_introns:
-			intron.score /= rna_mass
 
 		for tx in gene.transcripts():
 			if tx.end - tx.beg > tx_len:
