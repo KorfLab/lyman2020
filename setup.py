@@ -36,6 +36,36 @@ arg = parser.parse_args()
 class HamanError(Exception):
 	pass
 
+def gene_regions(chrom, padding):
+
+	# create gene-ish regions with padding added to each gene
+	gene_ish = []
+	for gene in [f for f in chrom.ftable.features if f.type == 'gene']:
+		beg = gene.beg - padding
+		end = gene.end + padding
+		if beg < 1: beg = 1
+		if end > len(chrom.seq): end = len(chrom.seq)
+		gene_ish.append(Feature(chrom, beg, end, '.', 'gene-ish'))
+	
+	# create clusters of gene-ish regions
+	gtable = FeatureTable(dna=chrom, features=gene_ish)
+	gtable._sort()
+	skip = {}
+	for gene in gtable.features:
+		if gene in skip: continue
+		beg = gene.beg
+		end = gene.end
+		while True:
+			got_all = True
+			overlaps = gtable.fetch(beg, end)
+			for ov in overlaps:
+				skip[ov] = True
+				if ov.end > end:
+					end = ov.end
+					got_all = False
+			if got_all: break
+		yield Feature(chrom, beg, end, '.', 'region', source='haman')
+
 if __name__ == '__main__':	
 
 	if not os.path.exists(arg.out):
@@ -44,32 +74,7 @@ if __name__ == '__main__':
 	genome = Reader(gff=arg.gff, fasta=arg.fasta, source=arg.source)
 	idx = 0
 	for chrom in genome:
-	
-		# create regions of overlapping genes
-		chrom.ftable._sort()
-		genes = []
-		for f in chrom.ftable.features:
-			if f.type == 'gene': genes.append(f)
-		regions = []
-		skip = 0
-		for i in range(len(genes)):
-			if skip > i: continue
-			beg = genes[i].beg - arg.padding
-			end = genes[i].end + arg.padding
-			if beg < 1: beg = 1
-			if end > len(chrom.seq): end = len(chrom.seq)
-			region = Feature(chrom, beg, end, '.', 'region', source='haman')
-			for j in range(i + 1, len(genes)):
-				if genes[j].overlap(region):
-					if genes[j].end > region.end:
-						region.end = genes[j].end
-				else:
-					skip = j
-					break
-			regions.append(region)
-		
-		# remap sequence and features smaller and export
-		for region in regions:
+		for region in gene_regions(chrom, arg.padding):
 			idx += 1
 			dir = arg.out + '/' + str(idx)
 			os.mkdir(dir)
@@ -104,12 +109,17 @@ if __name__ == '__main__':
 			
 			# json metadata
 			genes = dna.ftable.build_genes()
+			names = []
 			pc_genes = 0
 			nc_genes = 0
 			pc_issues = 0
 			introns = 0
 			strand = None
-			rnaseq = 0
+			splices = 0
+			max_splices = 0
+			reads = 0
+			max_reads = 0
+			
 			for gene in genes:
 				if strand == None:
 					strand = gene.strand
@@ -122,19 +132,34 @@ if __name__ == '__main__':
 					for tx in gene.transcripts():
 						introns += len(tx.introns)
 			for f in remap:
-				if f.type == 'intron' and f.source == 'RNASeq_splice':
-					rnaseq += 1
+				if f.type == 'gene':
+					names.append(f.id)
+				elif f.source == 'RNASeq_splice':
+					splices += 1
+					if f.score > max_splices: max_splices = f.score
+				elif f.source == 'RNASeq_reads':
+					reads += 1
+					if f.score > max_reads: max_reads = f.score
+			
 			meta = {
+				'region': idx,
+				'chrom': chrom.name,
+				'beg': region.beg,
+				'end': region.end,
+				'length': len(dna.seq),
+				'genes': len(names),
+				'gene_names': names,
 				'pc_genes': pc_genes,
 				'nc_genes': nc_genes,
 				'pc_issues': pc_issues,
 				'introns': introns,
 				'strand': strand,
-				'rnaseq': rnaseq,
+				'RNASeq_splice': splices,
+				'max_splices': max_splices,
+				'RNASeq_reads': reads,
+				'max_reads': max_reads,
 			}
 			mfp = open(dir + '/' + str(idx) + '.json', 'w+')
 			mfp.write(json.dumps(meta, indent=4))
 			mfp.close()
-
-
 
