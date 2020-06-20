@@ -199,10 +199,10 @@ best = ga[0]
 
 iso, iu, du, au = isoformer(don, acc, best['pd'], best['pa'],
 	samples=arg.transcripts)
-print('isoforms:', iso)
-print('introns:', iu)
-print('donors:', du)
-print('acceptors:', au)
+print('isoforms:', len(iso), iso)
+print('introns:', len(iu), iu)
+print('donors:', len(du), du)
+print('acceptors:', len(au), au)
 print('estimated donor probs:', best['pd'])
 print('estimated acceptor probs:', best['pa'])
 
