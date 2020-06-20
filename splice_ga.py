@@ -11,8 +11,6 @@ from grimoire.sequence import DNA
 from grimoire.feature import Feature, mRNA, Gene, FeatureTable
 from grimoire.genome import Reader
 
-random.seed(1)
-
 parser = argparse.ArgumentParser(
 	description='Splice site estimator and generator.')
 parser.add_argument('--fasta', required=True, type=str,
@@ -25,13 +23,17 @@ parser.add_argument('--generations', required=False, type=int, default=100,
 	metavar='<int>', help='number of generations to run [%(default)i]')
 parser.add_argument('--population', required=False, type=int, default=100,
 	metavar='<int>', help='population size [%(default)i]')
-parser.add_argument('--breeders', required=False, type=int, default=20,
+parser.add_argument('--breeders', required=False, type=int, default=50,
 	metavar='<int>', help='number of breeders in population [%(default)i]')
 parser.add_argument('--mut_rate', required=False, type=float, default=0.1,
 	metavar='<float>', help='number of breeders in population [%(default).3f]')
 parser.add_argument('--mut_mag', required=False, type=float, default=0.2,
 	metavar='<float>', help='number of breeders in population [%(default).3f]')
+parser.add_argument('--seed', required=False, type=int,
+	metavar='<int>', help='set random seed')
 arg = parser.parse_args()
+
+if arg.seed: random.seed(arg.seed)
 
 def isoformer(don, acc, pdon, pacc, samples=1000, min_intron=35, min_exon=15):
 
