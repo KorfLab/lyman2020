@@ -3,6 +3,7 @@
 import argparse
 import random
 import sys
+from collections import OrderedDict
 from grimoire.genome import Reader
 from spliceomatic import isoformer
 
@@ -12,8 +13,6 @@ parser.add_argument('--fasta', required=True, type=str,
 	metavar='<path>', help='gene region, just one sequence')
 parser.add_argument('--gff', required=True, type=str,
 	metavar='<path>', help='gff with RNASeq_splice data')
-parser.add_argument('--transcripts', required=False, type=int, default=1000,
-	metavar='<int>', help='number of transcripts to produce [%(default)i]')
 parser.add_argument('--generations', required=False, type=int, default=100,
 	metavar='<int>', help='number of generations to run [%(default)i]')
 parser.add_argument('--population', required=False, type=int, default=100,
@@ -40,8 +39,17 @@ def distance(p1, p2):
 		else:       sum += p1[i]
 	return sum
 
-def fitness(ind, don, acc, obs, s):
-	iso, iu, du, au = isoformer(don, acc, ind['pd'], ind['pa'], samples=s)
+def fitness(ind, dps, aps, obs, s):
+	
+	don = {}
+	for i in range(len(dps)): don[dps[i]] = ind['pd'][i]
+	don = OrderedDict(sorted(don.items()))
+	
+	acc = {}
+	for i in range(len(aps)): acc[aps[i]] = ind['pa'][i]
+	acc = OrderedDict(sorted(acc.items()))
+
+	iso, iu, du, au = isoformer(don, acc, samples=s)
 	d1 = distance(iu, obs)
 	d2 = distance(obs, iu)
 	return d1 + d2
@@ -149,11 +157,9 @@ best = ga[0]
 # Part 3: output #
 ##################
 
-print('Donors')
 for i in range(len(don)):
-	print(don[i], best['pd'][i])
-print('Acceptors')
+	print('don', don[i], best['pd'][i])
 for i in range(len(acc)):
-	print(acc[i], best['pa'][i])
+	print('acc', acc[i], best['pa'][i])
 
 

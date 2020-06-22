@@ -1,14 +1,14 @@
 import random
 
-def isoformer(don, acc, pdon, pacc, samples=1000, min_intron=35, min_exon=15):
+def isoformer(don, acc, samples=1000, min_intron=35, min_exon=15):
 
 	# generate transcripts
 	isoforms = {}
 	introns = {}
 	itotal = 0
 	for n in range(samples):
-		tds = [don[i] for i in range(len(don)) if random.random() < pdon[i]]
-		tas = [acc[i] for i in range(len(acc)) if random.random() < pacc[i]]
+		tds = [i for i in don if random.random() < don[i]]
+		tas = [i for i in acc if random.random() < acc[i]]
 		used = {}
 		splice = []
 		last_acc = 0
