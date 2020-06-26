@@ -25,6 +25,8 @@ parser.add_argument('--mut_mag', required=False, type=float, default=0.2,
 	metavar='<float>', help='number of breeders in population [%(default).3f]')
 parser.add_argument('--samples', required=False, type=int, default=1000,
 	metavar='<float>', help='transcripts in fitness calculation [%(default)i]')
+parser.add_argument('--init', required=False, type=str,
+	metavar='<path>', help='initial values for population')
 parser.add_argument('--seed', required=False, type=int,
 	metavar='<int>', help='set random seed')
 parser.add_argument('--verbose', action='store_true', help='show progress')
@@ -91,16 +93,39 @@ def ga_stats(ga, t):
 	ave = sum / len(ga)
 	return min, max, ave
 
+def init_from_file(filename, pop):
+	don, acc = [], []
+	with open(filename) as fp:
+		for line in fp.readlines():
+			(type, coor, val) = line.split()
+			if   type == 'don': don.append(float(val))
+			elif type == 'acc': acc.append(float(val))
+			else: raise Exception
+	
+	ga = []
+	for i in range(pop):
+		new_don = [d for d in don]
+		new_acc = [a for a in acc]
+		mutate(new_don, 0.5, 0.1)
+		mutate(new_acc, 0.5, 0.1)
+		ga.append({'pd':new_don, 'pa':new_acc, 'fit':None})
+	
+	return ga
+
 ##################################################
 # Part 1: collect introns, donors, and acceptors #
 ##################################################
 
 genome = Reader(gff=arg.gff, fasta=arg.fasta, source='wb.270')
 chrom = genome.next()
+genes = chrom.ftable.build_genes()
+strand = genes[0].strand
+
 intron = []
 don = [] # positions of donor sites
 acc = [] # positions of acceptor sites
 for f in [f for f in chrom.ftable.features if f.source == 'RNASeq_splice']:
+	if f.strand != strand: continue
 	intron.append({'beg':f.beg, 'end':f.end, 'score':f.score})
 	if f.beg not in don: don.append(f.beg)
 	if f.end not in acc: acc.append(f.end)
@@ -126,13 +151,18 @@ mag = arg.mut_mag
 sam = arg.samples
 
 ## intialize population
-ga = []
-for i in range(pop):
-	pd = [random.random() for i in range(len(don))]
-	pa = [random.random() for i in range(len(acc))]
-	ind = {'pd':pd, 'pa':pa, 'fit':None}
-	ind['fit'] = fitness(ind, don, acc, obs, sam)
-	ga.append(ind)
+ga = None
+if arg.init:
+	ga = init_from_file(arg.init, pop)
+else:
+	ga = []
+	for i in range(pop):
+		pd = [random.random() for i in range(len(don))]
+		pa = [random.random() for i in range(len(acc))]
+		ind = {'pd':pd, 'pa':pa, 'fit':None}
+		ga.append(ind)
+for i in range(pop): ga[i]['fit'] = fitness(ga[i], don, acc, obs, sam)
+		
 
 ## evolve population
 for g in range(gen):
