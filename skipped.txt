@@ -1,0 +1,11 @@
+Complex Locus: 8878
+Non-coding: 4503
+No introns: 410
+Non-canonical issues: 1827
+Low expression: 916
+High expression: 172
+Multiple isoforms: 1632
+Lacking RNA support: 7
+Short protein: 286
+Long protein: 56
+Too similar to others: 142
