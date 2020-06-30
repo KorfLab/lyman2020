@@ -12,12 +12,10 @@ def write_file(name, seqs):
 			fp.write(seq)
 			fp.write('\n')
 
-MIN_EXP = 10000
-MAX_EXP = 1000000
 FLANK = 20
 WINDOW = FLANK * 2 + 2
 CANONICAL = True
-CUT_HI = 0.01
+CUT_HI = 0.05
 
 sd_hi = {}   # splice donors above threshold
 sd_lo = {}   # splice donors below threshold
@@ -29,14 +27,12 @@ sa_fake = {} # acceptors
 with open('isoset.txt') as fp:
 	for line in fp.readlines():
 		reg = line.rstrip()
-		prefix = f'region/{reg}/{reg}'
+		prefix = f'favorites/{reg}/{reg}'
 		f = open(prefix + '.json')
 		m = json.loads(f.read())
 		f.close()
 		exp = m['max_splices']
-		
-		if exp < MIN_EXP: continue
-		if exp > MAX_EXP: continue		
+			
 		genome = Reader(fasta=prefix+'.fa', gff=prefix+'.gff')
 		chrom = genome.next()
 
