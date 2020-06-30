@@ -17,7 +17,7 @@ MAX_EXP = 1000000
 FLANK = 20
 WINDOW = FLANK * 2 + 2
 CANONICAL = True
-CUT_HI = 0.05
+CUT_HI = 0.01
 
 sd_hi = {}   # splice donors above threshold
 sd_lo = {}   # splice donors below threshold
@@ -33,27 +33,29 @@ with open('isoset.txt') as fp:
 		f = open(prefix + '.json')
 		m = json.loads(f.read())
 		f.close()
-		if m['max_splices'] < MIN_EXP: continue
-		if m['max_splices'] > MAX_EXP: continue		
+		exp = m['max_splices']
+		
+		if exp < MIN_EXP: continue
+		if exp > MAX_EXP: continue		
 		genome = Reader(fasta=prefix+'.fa', gff=prefix+'.gff')
 		chrom = genome.next()
 
-		# hi and lo
+		# hi and lo (which contain some double-counts if they share sites)
 		for f in chrom.ftable.features:
 			if f.source == 'RNASeq_splice':
 				s = f.seq_str(off5=-20, off3=20).upper()
 				d = s[0:WINDOW]
 				a = s[-WINDOW:]
-				p = f.score / m['max_splices']
+				p = f.score / exp
 				
 				# filters
 				if len(d) != WINDOW or len(a) != WINDOW:
-					sys.stderr.write(f'skipping edge {f} \n')
+					#sys.stderr.write(f'skipping edge {f} \n')
 					continue
 				gt = d[FLANK:FLANK+2]
 				ag = a[FLANK:FLANK+2]
 				if CANONICAL and (gt != 'GT' or ag != 'AG'):
-					sys.stderr.write(f'skipping non-canonical {f}\n')
+					#sys.stderr.write(f'skipping non-canonical {f}\n')
 					continue
 				
 				if p >= CUT_HI:
@@ -62,6 +64,7 @@ with open('isoset.txt') as fp:
 				else:
 					sd_lo[d] = True
 					sa_lo[a] = True
+		
 		# fake
 		for f in chrom.ftable.features:
 			if f.type == 'gene':
@@ -77,6 +80,11 @@ with open('isoset.txt') as fp:
 						if a not in sa_hi and a not in sa_lo:
 							sa_fake[a] = True
 
+# prune hi from lo (double-counted introns)
+for d in sd_hi:
+	if d in sd_lo: del sd_lo[d]
+for a in sa_hi:
+	if a in sa_lo: del sa_lo[a]
 
 # outputs
 write_file('don.lo.true.txt', sd_lo.keys())
