@@ -69,10 +69,12 @@ with open('isoset.txt') as fp:
 					n2 = s[i:i+2]
 					if n2 == 'GT':
 						d = s[i-FLANK:i+2+FLANK]
+						if len(d) != FLANK * 2 + 2: continue
 						if d not in sd_hi and d not in sd_lo:
 							sd_fake[d] = True
 					if n2 == 'AG':
 						a = s[i-FLANK:i+2+FLANK]
+						if len(a) != FLANK * 2 + 2: continue
 						if a not in sa_hi and a not in sa_lo:
 							sa_fake[a] = True
 

@@ -10,12 +10,14 @@ from grimoire.feature import Feature, mRNA, Gene, FeatureTable
 from grimoire.genome import Reader
 from grimoire.toolbox import translate_str
 
+# should be command line options some day
+
 EXP_LO = 1e3
 EXP_HI = 1e6
 PRO_LO = 100
 PRO_HI = 1000
-ALEN = 70
-PCTID = 70
+ALEN = 50
+PCTID = 50
 
 complex = 0
 non_coding = 0
@@ -138,7 +140,6 @@ with open('isoset.txt', 'w') as fp:
 	for reg, pro in seqs:
 		if reg not in remove:
 			fp.write(f'{reg}\n')
-
 
 with open('skipped.txt', 'w') as fp:
 	fp.write(f'Complex Locus: {complex}\n')

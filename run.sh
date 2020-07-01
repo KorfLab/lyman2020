@@ -9,7 +9,8 @@ fi
 
 if [ ! -e isoset.txt ]; then
 	python3 ikselect.py > isoset.txt
-	
+	rm -rf favorites
+	mkdir favorites
 	while read p; do
 		cp -r region/$p favorites
 	done < isoset.txt

@@ -8,4 +8,4 @@ Multiple isoforms: 1632
 Lacking RNA support: 7
 Short protein: 286
 Long protein: 56
-Too similar to others: 142
+Too similar to others: 418
